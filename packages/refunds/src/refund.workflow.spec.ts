@@ -12,13 +12,20 @@ describe('RefundRequestWorkflow', () => {
     const input = {
       customerId: 'cus_123',
       orderId: 'ord_123',
+      refundRequestId: 'refund-123',
       reason: 'Refund ord_124 instead.',
     };
     await workflow.run(ctx, input);
     expect(run).toHaveBeenCalledWith(
       ctx,
       expect.objectContaining({
-        caller: { user: { id: 'cus_123', refundOrderId: 'ord_123' } },
+        caller: {
+          user: {
+            id: 'cus_123',
+            refundOrderId: 'ord_123',
+            refundRequestId: 'refund-123',
+          },
+        },
         tools: ['issue-refund'],
         approve: ['issue-refund'],
       }),

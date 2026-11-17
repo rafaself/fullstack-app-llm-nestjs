@@ -10,6 +10,9 @@ import type { CustomerOrder } from '@cat-supplies-store/contracts';
 
 export type { CustomerOrder } from '@cat-supplies-store/contracts';
 
+export type RefundRequestReservation =
+  { status: 'reserved'; requestId: string } | { status: 'not_found' };
+
 @Injectable()
 export class OrdersRepository {
   constructor(
@@ -32,6 +35,52 @@ export class OrdersRepository {
       },
     });
     return toCustomerOrder(order);
+  }
+
+  async reserveRefundRequest(
+    customerId: string,
+    orderId: string,
+    requestId: string,
+  ): Promise<RefundRequestReservation> {
+    const result = await this.repository
+      .createQueryBuilder()
+      .update()
+      .set({ refund_request_id: requestId })
+      .where({
+        id: orderId,
+        customer_id: customerId,
+        status: 'delivered',
+        refundable: true,
+      })
+      .andWhere('refund_request_id IS NULL')
+      .execute();
+    if (result.affected === 1) return { status: 'reserved', requestId };
+
+    const order = await this.repository.findOne({
+      where: { id: orderId, customer_id: customerId },
+      select: {
+        id: true,
+        status: true,
+        refundable: true,
+        refund_request_id: true,
+      },
+    });
+    if (!order || !order.refundable || order.status !== 'delivered') {
+      return { status: 'not_found' };
+    }
+    return order.refund_request_id
+      ? { status: 'reserved', requestId: order.refund_request_id }
+      : { status: 'not_found' };
+  }
+
+  async releaseRefundRequest(requestId: string): Promise<boolean> {
+    const result = await this.repository
+      .createQueryBuilder()
+      .update()
+      .set({ refund_request_id: null })
+      .where({ refund_request_id: requestId, refundable: true })
+      .execute();
+    return result.affected === 1;
   }
 
   async changeAddress(

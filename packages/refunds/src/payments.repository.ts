@@ -28,6 +28,7 @@ export class PaymentsRepository {
     customerId: string,
     orderId: string,
     idempotencyKey: string,
+    refundRequestId?: string,
   ): Promise<RefundPersistenceResult> {
     return this.repository.manager.transaction(async (manager) => {
       const orders = manager.getRepository(OrderEntity);
@@ -54,6 +55,10 @@ export class PaymentsRepository {
         ) {
           return { status: 'idempotency_conflict' };
         }
+        await orders.update(order.id, {
+          refundable: false,
+          refund_request_id: null,
+        });
         return {
           status: 'success',
           refund: {
@@ -68,6 +73,8 @@ export class PaymentsRepository {
         (await refunds.existsBy({ payment_id: payment.id })) ||
         !order.refundable ||
         order.status !== 'delivered' ||
+        (order.refund_request_id !== null &&
+          order.refund_request_id !== refundRequestId) ||
         payment.refunded_cents + order.total_cents > payment.amount_cents
       ) {
         return { status: 'ineligible' };
@@ -79,13 +86,24 @@ export class PaymentsRepository {
         amount_cents: order.total_cents,
       });
       const refundedCents = payment.refunded_cents + order.total_cents;
-      await payments.update(payment.id, {
+      const paymentUpdate = await payments.update(payment.id, {
         refunded_cents: refundedCents,
         status:
           refundedCents >= payment.amount_cents
             ? 'refunded'
             : 'partially_refunded',
       });
+      if (paymentUpdate.affected !== 1) {
+        throw new Error('Payment state changed during refund.');
+      }
+
+      const orderUpdate = await orders.update(
+        { id: order.id, refundable: true },
+        { refundable: false, refund_request_id: null },
+      );
+      if (orderUpdate.affected !== 1) {
+        throw new Error('Order state changed during refund.');
+      }
 
       return {
         status: 'success',

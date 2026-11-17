@@ -1,6 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { AiAgents } from '@nestjs/ai/workflows';
-import { WorkflowClient } from '@nestjs/workflows';
+import {
+  WorkflowClient,
+  WorkflowIdConflictError,
+  type WorkflowStartResult,
+} from '@nestjs/workflows';
 import { randomUUID } from 'node:crypto';
 import {
   pendingRefundApprovalsResponseSchema,
@@ -29,16 +37,57 @@ export class RefundsService {
     orderId: string,
     reason: string,
   ): Promise<RefundRequestResponse> {
-    const order = await this.orders.findForCustomer(customerId, orderId);
-    if (!order || !order.refundable || order.status !== 'delivered') {
+    const proposedRequestId = `refund-${randomUUID()}`;
+    let reservation = await this.orders.reserveRefundRequest(
+      customerId,
+      orderId,
+      proposedRequestId,
+    );
+    if (reservation.status === 'not_found') {
       throw new NotFoundException('Refundable order not found.');
     }
-    const id = `refund-${randomUUID()}`;
-    const started = await this.workflows.start(
-      refundWorkflow.name,
-      { customerId, orderId, reason } satisfies RefundWorkflowInput,
-      { id, version: refundWorkflow.version, timeout: refundWorkflow.timeout },
-    );
+
+    if (reservation.requestId !== proposedRequestId) {
+      const existing = await this.workflows.getStatus(reservation.requestId);
+      if (
+        existing?.workflow === refundWorkflow.name &&
+        ['completed', 'failed', 'cancelled', 'compensation_failed'].includes(
+          existing.status,
+        )
+      ) {
+        await this.orders.releaseRefundRequest(reservation.requestId);
+        reservation = await this.orders.reserveRefundRequest(
+          customerId,
+          orderId,
+          proposedRequestId,
+        );
+        if (reservation.status === 'not_found') {
+          throw new NotFoundException('Refundable order not found.');
+        }
+      }
+    }
+
+    const input = {
+      customerId,
+      orderId,
+      reason,
+      refundRequestId: reservation.requestId,
+    } satisfies RefundWorkflowInput;
+    let started: Pick<WorkflowStartResult, 'id' | 'status'>;
+    try {
+      started = await this.workflows.start(refundWorkflow.name, input, {
+        id: reservation.requestId,
+        version: refundWorkflow.version,
+        timeout: refundWorkflow.timeout,
+      });
+    } catch (error) {
+      if (!(error instanceof WorkflowIdConflictError)) throw error;
+      const existing = await this.workflows.getStatus(reservation.requestId);
+      if (!existing || existing.workflow !== refundWorkflow.name) {
+        throw new ConflictException('A refund request is already pending.');
+      }
+      started = existing;
+    }
     return refundRequestResponseSchema.parse({
       runId: started.id,
       status: started.status,
@@ -73,6 +122,7 @@ export class RefundsService {
       reason,
       by: 'support-reviewer',
     });
+    await this.orders.releaseRefundRequest(runId);
     return refundDecisionResponseSchema.parse({ runId, approved: false });
   }
 }

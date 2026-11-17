@@ -24,15 +24,18 @@ export class RefundTools {
     { orderId }: { orderId: string; reason: string },
     context: AgentFunctionContext<
       unknown,
-      { id?: unknown; refundOrderId?: unknown }
+      { id?: unknown; refundOrderId?: unknown; refundRequestId?: unknown }
     >,
   ) {
     const customerId = context.user?.id;
     const refundOrderId = context.user?.refundOrderId;
+    const refundRequestId = context.user?.refundRequestId;
     if (
       typeof customerId !== 'string' ||
       typeof refundOrderId !== 'string' ||
       !refundOrderId ||
+      typeof refundRequestId !== 'string' ||
+      !refundRequestId ||
       !context.idempotencyKey
     ) {
       throw new UnauthorizedException(
@@ -48,6 +51,7 @@ export class RefundTools {
       customerId,
       refundOrderId,
       context.idempotencyKey,
+      refundRequestId,
     );
   }
 }

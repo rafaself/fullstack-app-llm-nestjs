@@ -20,6 +20,7 @@ export class PaymentsService {
     customerId: string,
     orderId: string,
     idempotencyKey: string,
+    refundRequestId?: string,
   ): Promise<SimulatedRefund> {
     if (!idempotencyKey || idempotencyKey.length > 200) {
       throw new ConflictException(
@@ -31,6 +32,7 @@ export class PaymentsService {
       customerId,
       orderId,
       idempotencyKey,
+      refundRequestId,
     );
     switch (result.status) {
       case 'success':

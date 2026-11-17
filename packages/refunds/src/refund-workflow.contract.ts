@@ -8,5 +8,6 @@ export const refundWorkflow = {
 export interface RefundWorkflowInput {
   customerId: string;
   orderId: string;
+  refundRequestId: string;
   reason: string;
 }

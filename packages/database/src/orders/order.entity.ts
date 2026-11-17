@@ -22,4 +22,7 @@ export class OrderEntity {
 
   @Column({ type: 'boolean' })
   refundable!: boolean;
+
+  @Column({ type: 'text', nullable: true })
+  refund_request_id!: string | null;
 }

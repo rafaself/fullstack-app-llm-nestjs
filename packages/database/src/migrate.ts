@@ -5,6 +5,7 @@ import * as addressConfirmations from './migrations/003-address-change-confirmat
 import * as conversationApprovalIndex from './migrations/006-conversation-approval-index.js';
 import * as conversations from './migrations/005-conversations.js';
 import * as oneRefundPerPayment from './migrations/004-one-refund-per-payment.js';
+import * as orderRefundLifecycle from './migrations/007-order-refund-lifecycle.js';
 
 export async function migrateDatabase(dataSource: DataSource): Promise<void> {
   const runner = dataSource.createQueryRunner();
@@ -22,6 +23,7 @@ export async function migrateDatabase(dataSource: DataSource): Promise<void> {
       oneRefundPerPayment,
       conversations,
       conversationApprovalIndex,
+      orderRefundLifecycle,
     ]) {
       const applied = await runner.query(
         'SELECT 1 FROM schema_migrations WHERE name = $1',

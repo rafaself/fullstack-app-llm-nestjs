@@ -71,6 +71,10 @@ describe('Cat store API (e2e)', () => {
        WHERE id IN ('pay_123', 'pay_124')`,
     );
     await database.query(
+      `UPDATE orders SET refundable = true, refund_request_id = NULL
+       WHERE id IN ('ord_123', 'ord_124')`,
+    );
+    await database.query(
       "UPDATE orders SET delivery_address = '123 Demo Street, São Paulo' WHERE id = 'ord_125'",
     );
     await database.query('UPDATE products SET embedding = NULL');
@@ -599,6 +603,56 @@ describe('Cat store API (e2e)', () => {
     }
   });
 
+  it.each(['sequential', 'concurrent'] as const)(
+    'reuses one pending refund workflow for the same order (%s)',
+    async (mode) => {
+      const database = app.get(DataSource);
+      const suffix = randomUUID();
+      const paymentId = `pay-${suffix}`;
+      const orderId = `ord-${suffix}`;
+      let runId: string | undefined;
+      await database.query(
+        "INSERT INTO payments (id, amount_cents, status) VALUES ($1, 1500, 'captured')",
+        [paymentId],
+      );
+      await database.query(
+        "INSERT INTO orders (id, customer_id, payment_id, status, total_cents, delivery_address, refundable) VALUES ($1, 'cus_123', $2, 'delivered', 1500, 'Test address', true)",
+        [orderId, paymentId],
+      );
+
+      const requestRefund = () =>
+        request(app.getHttpServer())
+          .post('/refunds')
+          .set('Authorization', 'Bearer test-customer-token')
+          .send({ orderId, reason: 'The item arrived damaged.' })
+          .expect(201);
+      try {
+        const responses =
+          mode === 'concurrent'
+            ? await Promise.all([requestRefund(), requestRefund()])
+            : [await requestRefund(), await requestRefund()];
+        runId = responses[0]!.body.runId as string;
+        expect(responses.map((response) => response.body.runId)).toEqual([
+          runId,
+          runId,
+        ]);
+        const reservation = await database.query<
+          { refund_request_id: string | null }[]
+        >('SELECT refund_request_id FROM orders WHERE id = $1', [orderId]);
+        expect(reservation).toEqual([{ refund_request_id: runId }]);
+        await expect(
+          app.get(WorkflowClient).getStatus(runId),
+        ).resolves.toMatchObject({ workflow: 'refund-request' });
+      } finally {
+        if (runId) {
+          await app.get(WorkflowClient).delete(runId, { force: true });
+        }
+        await database.query('DELETE FROM orders WHERE id = $1', [orderId]);
+        await database.query('DELETE FROM payments WHERE id = $1', [paymentId]);
+      }
+    },
+  );
+
   it('waits for refund approval, issues an idempotent simulated refund, and rejects another', async () => {
     const started = await request(app.getHttpServer())
       .post('/refunds')
@@ -685,6 +739,10 @@ describe('Cat store API (e2e)', () => {
       "SELECT refunded_cents FROM payments WHERE id = 'pay_123'",
     );
     expect(approvedPayment[0]?.refunded_cents).toBe(4599);
+    const refundedOrder = await database.query<{ refundable: boolean }[]>(
+      "SELECT refundable FROM orders WHERE id = 'ord_123'",
+    );
+    expect(refundedOrder[0]?.refundable).toBe(false);
     const refundRows = await database.query<{ count: string }[]>(
       "SELECT count(*)::text AS count FROM payment_refunds WHERE payment_id = 'pay_123'",
     );
@@ -701,6 +759,15 @@ describe('Cat store API (e2e)', () => {
       "SELECT count(*)::text AS count FROM payment_refunds WHERE payment_id = 'pay_123'",
     );
     expect(idempotentCount[0]?.count).toBe('1');
+    await request(app.getHttpServer())
+      .post('/refunds')
+      .set('Authorization', 'Bearer test-customer-token')
+      .send({ orderId: 'ord_123', reason: 'The item arrived damaged.' })
+      .expect(404, {
+        message: 'Refundable order not found.',
+        error: 'Not Found',
+        statusCode: 404,
+      });
 
     const rejected = await request(app.getHttpServer())
       .post('/refunds')
@@ -724,6 +791,102 @@ describe('Cat store API (e2e)', () => {
     );
     expect(rejectedPayment[0]?.refunded_cents).toBe(0);
   }, 20_000);
+
+  it('rolls back a failed refund and permits a retry', async () => {
+    const database = app.get(DataSource);
+    const suffix = randomUUID();
+    const sqlSuffix = suffix.replaceAll('-', '');
+    const paymentId = `pay-${suffix}`;
+    const orderId = `ord-${suffix}`;
+    const triggerName = `fail_order_refund_${sqlSuffix}`;
+    const functionName = `fail_order_refund_${sqlSuffix}`;
+    const idempotencyKey = `failed-${suffix}`;
+    let triggerCreated = false;
+    let functionCreated = false;
+    await database.query(
+      "INSERT INTO payments (id, amount_cents, status) VALUES ($1, 1500, 'captured')",
+      [paymentId],
+    );
+    await database.query(
+      "INSERT INTO orders (id, customer_id, payment_id, status, total_cents, delivery_address, refundable) VALUES ($1, 'cus_123', $2, 'delivered', 1500, 'Test address', true)",
+      [orderId, paymentId],
+    );
+
+    try {
+      await database.query(`
+        CREATE FUNCTION ${functionName}() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+          RAISE EXCEPTION 'Simulated order refund write failure';
+        END;
+        $$
+      `);
+      functionCreated = true;
+      await database.query(`
+        CREATE TRIGGER ${triggerName}
+        BEFORE UPDATE OF refundable ON orders
+        FOR EACH ROW
+        WHEN (OLD.id = '${orderId}' AND NEW.refundable = false)
+        EXECUTE FUNCTION ${functionName}()
+      `);
+      triggerCreated = true;
+
+      const payments = worker!.get(PaymentsService);
+      await expect(
+        payments.refundOrder('cus_123', orderId, idempotencyKey),
+      ).rejects.toThrow('Simulated order refund write failure');
+      const failedState = await database.query<
+        {
+          refunded_cents: number;
+          status: string;
+          refundable: boolean;
+          refunds: string;
+        }[]
+      >(
+        `SELECT payments.refunded_cents, payments.status, orders.refundable,
+                (SELECT count(*)::text FROM payment_refunds WHERE payment_id = payments.id) AS refunds
+         FROM payments JOIN orders ON orders.payment_id = payments.id
+         WHERE payments.id = $1`,
+        [paymentId],
+      );
+      expect(failedState).toEqual([
+        {
+          refunded_cents: 0,
+          status: 'captured',
+          refundable: true,
+          refunds: '0',
+        },
+      ]);
+
+      await database.query(`DROP TRIGGER ${triggerName} ON orders`);
+      triggerCreated = false;
+      await database.query(`DROP FUNCTION ${functionName}()`);
+      functionCreated = false;
+      await expect(
+        payments.refundOrder('cus_123', orderId, idempotencyKey),
+      ).resolves.toMatchObject({ status: 'simulated', amountCents: 1500 });
+      const successfulOrder = await database.query<
+        { refundable: boolean; refund_request_id: string | null }[]
+      >('SELECT refundable, refund_request_id FROM orders WHERE id = $1', [
+        orderId,
+      ]);
+      expect(successfulOrder).toEqual([
+        { refundable: false, refund_request_id: null },
+      ]);
+    } finally {
+      if (triggerCreated) {
+        await database.query(`DROP TRIGGER ${triggerName} ON orders`);
+      }
+      if (functionCreated) {
+        await database.query(`DROP FUNCTION ${functionName}()`);
+      }
+      await database.query(
+        'DELETE FROM payment_refunds WHERE payment_id = $1',
+        [paymentId],
+      );
+      await database.query('DELETE FROM orders WHERE id = $1', [orderId]);
+      await database.query('DELETE FROM payments WHERE id = $1', [paymentId]);
+    }
+  });
 
   it.each(['sequential', 'concurrent'] as const)(
     'prevents duplicate full refunds with different keys (%s)',

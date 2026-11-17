@@ -5,9 +5,14 @@ import { PaymentsService } from './payments.service.js';
 import { RefundTools } from './refund.tools.js';
 
 function context(
-  user: { id?: unknown; refundOrderId?: unknown } | undefined,
+  user:
+    | { id?: unknown; refundOrderId?: unknown; refundRequestId?: unknown }
+    | undefined,
   idempotencyKey: string | undefined = 'durable-refund-key',
-): AgentFunctionContext<unknown, { id?: unknown; refundOrderId?: unknown }> {
+): AgentFunctionContext<
+  unknown,
+  { id?: unknown; refundOrderId?: unknown; refundRequestId?: unknown }
+> {
   return {
     name: 'issue-refund',
     user,
@@ -33,7 +38,11 @@ describe('RefundTools authorization', () => {
     await expect(
       tools.issueRefund(
         { ...input, orderId: 'ord_124' },
-        context({ id: 'cus_123', refundOrderId: 'ord_123' }),
+        context({
+          id: 'cus_123',
+          refundOrderId: 'ord_123',
+          refundRequestId: 'refund-123',
+        }),
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(refundOrder).not.toHaveBeenCalled();
@@ -46,6 +55,8 @@ describe('RefundTools authorization', () => {
     { id: 'cus_123', refundOrderId: undefined },
     { id: 'cus_123', refundOrderId: '' },
     { id: 'cus_123', refundOrderId: 123 },
+    { id: 'cus_123', refundOrderId: 'ord_123' },
+    { id: 'cus_123', refundOrderId: 'ord_123', refundRequestId: '' },
     { refundOrderId: 'ord_123' },
   ])(
     'fails closed without trusted workflow identity and order %#',
@@ -60,7 +71,14 @@ describe('RefundTools authorization', () => {
 
   it('requires the durable idempotency key even for a matching order', async () => {
     const { tools, refundOrder } = setup();
-    const caller = context({ id: 'cus_123', refundOrderId: 'ord_123' }, '');
+    const caller = context(
+      {
+        id: 'cus_123',
+        refundOrderId: 'ord_123',
+        refundRequestId: 'refund-123',
+      },
+      '',
+    );
     await expect(tools.issueRefund(input, caller)).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
@@ -72,13 +90,18 @@ describe('RefundTools authorization', () => {
     await expect(
       tools.issueRefund(
         input,
-        context({ id: 'cus_123', refundOrderId: 'ord_123' }),
+        context({
+          id: 'cus_123',
+          refundOrderId: 'ord_123',
+          refundRequestId: 'refund-123',
+        }),
       ),
     ).resolves.toEqual({ status: 'simulated' });
     expect(refundOrder).toHaveBeenCalledExactlyOnceWith(
       'cus_123',
       'ord_123',
       'durable-refund-key',
+      'refund-123',
     );
   });
 });

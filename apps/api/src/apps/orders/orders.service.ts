@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { OrdersRepository, type CustomerOrder } from './orders.repository';
+import {
+  OrdersRepository,
+  type CustomerOrder,
+  type RefundRequestReservation,
+} from './orders.repository';
 
 export type OrderRecord = CustomerOrder;
 
@@ -12,6 +16,18 @@ export class OrdersService {
     orderId: string,
   ): Promise<OrderRecord | null> {
     return this.orders.findForCustomer(customerId, orderId);
+  }
+
+  reserveRefundRequest(
+    customerId: string,
+    orderId: string,
+    requestId: string,
+  ): Promise<RefundRequestReservation> {
+    return this.orders.reserveRefundRequest(customerId, orderId, requestId);
+  }
+
+  releaseRefundRequest(requestId: string): Promise<boolean> {
+    return this.orders.releaseRefundRequest(requestId);
   }
 
   async changeAddress(
