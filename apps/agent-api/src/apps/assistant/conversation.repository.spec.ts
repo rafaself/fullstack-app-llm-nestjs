@@ -12,6 +12,7 @@ class MetadataDataSource extends DataSource {
     return this.buildMetadatas();
   }
 }
+
 const metadata = new MetadataDataSource(
   databaseOptions({ connectionString: 'postgresql://unused/unused' }),
 );
@@ -56,19 +57,25 @@ function fixture() {
       runner.isReleased = true;
     }),
   };
+
   runner.manager = metadata.createEntityManager(
     runner as unknown as QueryRunner,
   );
+
   const database = {
     getRepository: () => ({ existsBy: vi.fn(async () => true) }),
     createQueryRunner: () => runner,
   };
+
   const repository = new ConversationRepository(
     database as unknown as DataSource,
   );
+
   return { repository, runner, client, events };
 }
+
 afterEach(() => vi.restoreAllMocks());
+
 describe('conversation session cleanup', () => {
   it('commits recovery before returning and unlocks exactly once before releasing', async () => {
     const f = fixture();
@@ -94,6 +101,7 @@ describe('conversation session cleanup', () => {
       expect(f.events).toEqual(['close', 'release']);
     },
   );
+
   it('rolls back failed recovery and preserves its cause when rollback also fails', async () => {
     vi.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
     const f = fixture();
@@ -111,6 +119,7 @@ describe('conversation session cleanup', () => {
     expect(f.client.end).toHaveBeenCalledTimes(1);
     expect(f.runner.release).toHaveBeenCalledTimes(1);
   });
+
   it('closes a connection when lock acquisition has an uncertain outcome', async () => {
     const f = fixture();
     const error = new Error('acquisition cancelled');
@@ -120,6 +129,7 @@ describe('conversation session cleanup', () => {
     );
     expect(f.events).toEqual(['close', 'release']);
   });
+
   it('returns a healthy connection normally when another session owns the lock', async () => {
     const f = fixture();
     f.runner.query.mockResolvedValueOnce([{ locked: false }]);
@@ -129,6 +139,7 @@ describe('conversation session cleanup', () => {
     expect(f.client.end).not.toHaveBeenCalled();
     expect(f.events).toEqual(['release']);
   });
+
   it('aborts execution on session loss and refuses subsequent tool operations', async () => {
     const f = fixture();
     const session = await f.repository.acquire('conversation', 'customer');

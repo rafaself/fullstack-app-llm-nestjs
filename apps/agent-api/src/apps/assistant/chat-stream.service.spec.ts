@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { UIMessageChunk } from 'ai';
 import type { AssistantService } from './assistant.service';
 import { CHAT_STREAM_LIMITS, ChatStreamService } from './chat-stream.service';
+
 type Generation = ReturnType<AssistantService['stream']>;
+
 function fixture() {
   let resolve!: () => void;
   let reject!: (error: unknown) => void;
@@ -38,7 +40,9 @@ function fixture() {
     },
   };
 }
+
 afterEach(() => vi.useRealTimers());
+
 describe('detached chat execution lifecycle', () => {
   it('continues generation and persists after a disconnected client', async () => {
     const service = new ChatStreamService();
@@ -57,6 +61,7 @@ describe('detached chat execution lifecycle', () => {
     await vi.waitFor(() => expect(settle).toHaveBeenCalledTimes(1));
     await service.onModuleDestroy();
   });
+
   it('waits for persistence before closing the response', async () => {
     const service = new ChatStreamService();
     const run = fixture();
@@ -75,6 +80,7 @@ describe('detached chat execution lifecycle', () => {
     await pending;
     expect(read).toHaveBeenCalled();
   });
+
   it('detaches a slow reader without aborting work or buffering indefinitely', async () => {
     const service = new ChatStreamService();
     const run = fixture();
@@ -90,6 +96,7 @@ describe('detached chat execution lifecycle', () => {
     run.resolve();
     await service.onModuleDestroy();
   });
+
   it('enforces the execution deadline independently of connection cancellation', async () => {
     vi.useFakeTimers();
     const service = new ChatStreamService();
@@ -103,6 +110,7 @@ describe('detached chat execution lifecycle', () => {
     await service.onModuleDestroy();
     expect(settle).toHaveBeenCalledWith(undefined, expect.any(Error));
   });
+
   it('aborts and waits for active generations on shutdown', async () => {
     const service = new ChatStreamService();
     const run = fixture();
@@ -114,6 +122,7 @@ describe('detached chat execution lifecycle', () => {
     run.reject(new Error('shutdown'));
     await stopped;
   });
+
   it('keeps capacity limits and does not reserve a slot if startup throws', async () => {
     const service = new ChatStreamService();
     expect(() =>

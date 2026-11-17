@@ -9,6 +9,7 @@ import { ConversationService } from './conversation.service';
 describe('conversation finalization', () => {
   it('keeps the lock until started tools settle even if the provider has already failed', async () => {
     const release = vi.fn(async () => {});
+
     const turn = { id: crypto.randomUUID() };
     const repo = {
       acquire: vi.fn(async () => ({
@@ -22,14 +23,18 @@ describe('conversation finalization', () => {
       ),
       finish: vi.fn(async () => {}),
     };
+
     let caller!: CustomerRequest;
+
     const assistant = {
       stream: vi.fn((_messages, request) => {
         caller = request;
         return {};
       }),
     };
+
     let settle!: (result: undefined, error: unknown) => Promise<void>;
+
     const streams = {
       open: vi.fn((_customer, start, save) => {
         start(new AbortController().signal);
@@ -43,12 +48,15 @@ describe('conversation finalization', () => {
       streams as unknown as ChatStreamService,
       {} as BusinessApiClient,
     );
+
     await service.send(
       crypto.randomUUID(),
       { requestId: crypto.randomUUID(), text: 'Find' },
       { headers: {}, customerId: 'cus_123' },
     );
+
     let complete!: (value: object) => void;
+
     const operation = caller.execution!.runTool(
       'call',
       'find-order',
@@ -58,22 +66,28 @@ describe('conversation finalization', () => {
           complete = resolve;
         }),
     );
+
     const finished = settle(
       undefined,
       new Error('Provider aborted before tool completion'),
     );
+
     await Promise.resolve();
+
     expect(repo.finish).not.toHaveBeenCalled();
     expect(release).not.toHaveBeenCalled();
     expect(() =>
       caller.execution!.runTool('late', 'find-order', {}, async () => ({})),
     ).toThrow('finished');
     complete({ id: 'ord_123' });
+
     await operation;
     await finished;
+
     expect(repo.finish).toHaveBeenCalledTimes(1);
     expect(release).toHaveBeenCalledTimes(1);
   });
+
   it('bounds approval admission before reserving database connections and releases capacity on failure', async () => {
     let reject!: (error: Error) => void;
     const acquisition = new Promise<never>((_resolve, no) => {
@@ -93,13 +107,18 @@ describe('conversation finalization', () => {
         crypto.randomUUID(),
         { customerId: 'cus_123', headers: {} },
       );
+
     const active = Array.from({ length: 5 }, submit);
     const results = Promise.allSettled(active);
+
     await expect(submit()).rejects.toThrow('Approval capacity');
+
     expect(repo.acquire).toHaveBeenCalledTimes(5);
     reject(new Error('Database unavailable'));
+
     await results;
     await expect(submit()).rejects.toThrow('Database unavailable');
+
     expect(repo.acquire).toHaveBeenCalledTimes(6);
   });
 });

@@ -38,16 +38,19 @@ export class ChatStreamService implements OnModuleDestroy {
   ) {
     if (this.stopping || this.active.size >= CHAT_STREAM_LIMITS.perProcess)
       throw new ServiceUnavailableException('Chat capacity is unavailable.');
+
     if (this.customers.has(customerId))
       throw new HttpException(
         'A chat response is already active for this customer.',
         HttpStatus.TOO_MANY_REQUESTS,
       );
+
     const abort = new AbortController();
     const generation = start(abort.signal);
     this.customers.add(customerId);
     let attached = true;
     let controller: ReadableStreamDefaultController<Uint8Array>;
+
     const body = new ReadableStream<Uint8Array>(
       {
         start(value) {
@@ -66,7 +69,9 @@ export class ChatStreamService implements OnModuleDestroy {
         ),
       CHAT_STREAM_LIMITS.lifetimeMs,
     );
+
     timer.unref();
+
     // Drain independently of the client. A slow reader is detached at 256 KiB.
     const delivery = (async () => {
       try {
@@ -99,6 +104,7 @@ export class ChatStreamService implements OnModuleDestroy {
         abort.abort(new Error('Stream source failed.'));
       }
     })();
+
     const completion = (async () => {
       let result: Result | undefined;
       let failure: unknown;
@@ -125,7 +131,9 @@ export class ChatStreamService implements OnModuleDestroy {
         this.active.delete(abort);
       }
     })();
+
     this.active.set(abort, completion);
+
     return new Response(body, {
       headers: {
         'content-type': 'text/event-stream',

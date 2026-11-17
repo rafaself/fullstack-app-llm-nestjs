@@ -24,6 +24,7 @@ import { ConversationService } from './conversation.service';
 @UseGuards(ThrottlerGuard, CustomerAuthGuard)
 export class AssistantController {
   constructor(private readonly conversations: ConversationService) {}
+
   @Post()
   create(
     @Body({ schema: createConversationSchema }) _body: Record<string, never>,
@@ -31,10 +32,12 @@ export class AssistantController {
   ) {
     return this.conversations.create(request);
   }
+
   @Get()
   list(@Req() request: CustomerRequest) {
     return this.conversations.list(request);
   }
+
   @Get(':conversationId')
   @Throttle({ default: { limit: 120, ttl: 60_000 } })
   history(
@@ -43,6 +46,7 @@ export class AssistantController {
   ) {
     return this.conversations.history(id, request);
   }
+
   @Post(':conversationId/messages')
   send(
     @Param('conversationId', { schema: conversationIdSchema }) id: string,
@@ -51,6 +55,7 @@ export class AssistantController {
   ) {
     return this.conversations.send(id, body, request);
   }
+
   @Post(':conversationId/approvals/:confirmationId')
   approve(
     @Param('conversationId', { schema: conversationIdSchema }) id: string,

@@ -87,20 +87,26 @@ export class ConversationRepository {
     await this.assertOwner(conversationId, customerId);
     const runner = this.database.createQueryRunner();
     let client: PoolClient;
+
     try {
       client = await runner.connect();
     } catch (error) {
       await runner.release();
       throw error;
     }
+
     const lost = new AbortController();
+
     const onLoss = () =>
       lost.abort(new Error('Conversation database session ended.'));
+
     client.on('error', onLoss);
     client.on('end', onLoss);
+
     let locked = false;
     let lockAttempted = false;
     let releasing: Promise<void> | undefined;
+
     const session: ConversationSession = {
       runner,
       conversationId,
@@ -151,6 +157,7 @@ export class ConversationRepository {
           }
         })()),
     };
+
     try {
       lockAttempted = true;
       const [row] = await runner.query(
@@ -178,6 +185,7 @@ export class ConversationRepository {
 
   private async recover({ runner, conversationId }: ConversationSession) {
     await runner.startTransaction();
+
     const activeTurns = runner.manager
       .createQueryBuilder()
       .subQuery()
@@ -185,6 +193,7 @@ export class ConversationRepository {
       .from(ConversationTurnEntity, 'turn')
       .where('turn.conversation_id = :conversationId', { conversationId })
       .andWhere('turn.status = :turnStatus', { turnStatus: 'running' });
+
     await runner.manager
       .createQueryBuilder()
       .update(ConversationToolExecutionEntity)
@@ -193,18 +202,21 @@ export class ConversationRepository {
       .andWhere(`turn_id IN ${activeTurns.getQuery()}`)
       .setParameters(activeTurns.getParameters())
       .execute();
+
     await runner.manager
       .createQueryBuilder()
       .update(ConversationApprovalEntity)
       .set({ status: 'unknown' })
       .where({ conversation_id: conversationId, status: 'executing' })
       .execute();
+
     await runner.manager
       .createQueryBuilder()
       .update(ConversationTurnEntity)
       .set({ status: 'interrupted', finished_at: () => 'CURRENT_TIMESTAMP' })
       .where({ conversation_id: conversationId, status: 'running' })
       .execute();
+
     await runner.commitTransaction();
     // On failure, acquire() invokes session cleanup to roll back or discard.
   }
@@ -247,6 +259,7 @@ export class ConversationRepository {
         select: { confirmation_id: true, status: true },
         where: { conversation_id: conversationId },
       });
+
     return approvals.map((approval) => ({
       confirmationId: approval.confirmation_id,
       status: approval.status,
@@ -260,7 +273,9 @@ export class ConversationRepository {
         confirmation_id: confirmationId,
         conversation_id: session.conversationId,
       });
+
     if (!approval) throw new NotFoundException('Proposal not found.');
+
     return approval;
   }
 
@@ -279,6 +294,7 @@ export class ConversationRepository {
         status: 'pending',
       })
       .execute();
+
     if (result.affected !== 1)
       throw new ConflictException('Proposal is not pending.');
   }
@@ -304,7 +320,9 @@ export class ConversationRepository {
       FROM conversations c WHERE c.id = $1 AND c.customer_id = $2`,
       [conversationId, customerId],
     );
+
     if (!row) throw new NotFoundException('Conversation not found.');
+
     return row;
   }
 
@@ -320,10 +338,12 @@ export class ConversationRepository {
         conversation_id: session.conversationId,
         request_id: requestId,
       });
+
     if (previous && (previous.input !== input || previous.kind !== kind))
       throw new ConflictException(
         'Request ID was already used for different input.',
       );
+
     return previous as ConversationTurn | null;
   }
 
@@ -336,7 +356,9 @@ export class ConversationRepository {
     const turns = await this.turns(session.conversationId, session.runner);
     session.signal.throwIfAborted();
     const previous = await this.previous(session, requestId, input, kind);
+
     if (previous) return { turn: previous, duplicate: true, history: turns };
+
     if (
       kind === 'message' &&
       turns.filter((turn) => turn.kind === 'message').length >= 40
@@ -345,6 +367,7 @@ export class ConversationRepository {
         'Conversation is full. Start a new conversation.',
       );
     }
+
     const result = await session.runner.manager
       .createQueryBuilder()
       .insert()
@@ -360,7 +383,9 @@ export class ConversationRepository {
       })
       .returning('*')
       .execute();
+
     const [turn] = result.raw as ConversationTurn[];
+
     return { turn, duplicate: false, history: turns };
   }
 
@@ -392,6 +417,7 @@ export class ConversationRepository {
         JSON.stringify(ui),
       ],
     );
+
     if (rows.length !== 1)
       throw new ConflictException('Turn is missing or already finalized.');
   }
@@ -444,11 +470,13 @@ export class ConversationRepository {
     operation: () => Promise<T>,
   ): Promise<T> {
     session.signal.throwIfAborted();
+
     const previous: (ToolExecution & { same_input: boolean })[] =
       await session.runner.query(
         'SELECT *, input = $3::jsonb AS same_input FROM conversation_tool_executions WHERE turn_id = $1 AND tool_call_id = $2',
         [turnId, callId, JSON.stringify(input)],
       );
+
     if (previous[0]) {
       if (
         previous[0].name !== name ||
@@ -458,6 +486,7 @@ export class ConversationRepository {
         throw new ConflictException('Tool execution cannot be repeated.');
       return previous[0].output as T;
     }
+
     await session.runner.manager
       .createQueryBuilder()
       .insert()
@@ -471,7 +500,9 @@ export class ConversationRepository {
       })
       .setParameter('input', JSON.stringify(input))
       .execute();
+
     let output: T;
+
     try {
       session.signal.throwIfAborted();
       output = await operation();
@@ -484,8 +515,10 @@ export class ConversationRepository {
       await this.finishTool(session, turnId, callId, status);
       throw error;
     }
+
     // Never report success to the model before the operation result is durable.
     const proposal = addressChangeProposalSchema.safeParse(output);
+
     if (name === 'change-address' && proposal.success) {
       const saved: { turn_id: string }[] = await session.runner.query(
         `WITH saved AS (
@@ -511,6 +544,7 @@ export class ConversationRepository {
     } else {
       await this.finishTool(session, turnId, callId, 'completed', output);
     }
+
     return output;
   }
   private async finishTool(

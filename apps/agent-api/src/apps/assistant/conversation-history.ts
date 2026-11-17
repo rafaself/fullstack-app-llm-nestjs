@@ -20,6 +20,7 @@ export function toolParts(tools: ToolExecution[]): UIMessage['parts'] {
         }),
   }));
 }
+
 export function turnUI(
   turn: ConversationTurn,
   tools: ToolExecution[],
@@ -45,6 +46,7 @@ export function turnUI(
     ? [user, { id: turn.id, role: 'assistant', parts }]
     : [user];
 }
+
 export function modelContext(
   turns: ConversationTurn[],
   tools: ToolExecution[],

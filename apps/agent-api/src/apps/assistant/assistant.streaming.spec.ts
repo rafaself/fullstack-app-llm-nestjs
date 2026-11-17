@@ -19,6 +19,7 @@ describe('Conversation HTTP boundary', () => {
     context.switchToHttp().getRequest().customerId = 'cus_123';
     return true;
   });
+
   beforeEach(async () => {
     vi.clearAllMocks();
     const module = await Test.createTestingModule({
@@ -39,6 +40,7 @@ describe('Conversation HTTP boundary', () => {
     await app.listen(0, '127.0.0.1');
     url = `${await app.getUrl()}/assistant/conversations/${crypto.randomUUID()}/messages`;
   });
+
   afterEach(async () => {
     await app.close();
   });
@@ -49,6 +51,7 @@ describe('Conversation HTTP boundary', () => {
       body: JSON.stringify(payload),
     });
   }
+
   it('accepts a new user message', async () => {
     const response = await post(input);
     expect(response.status).toBe(200);
@@ -59,6 +62,7 @@ describe('Conversation HTTP boundary', () => {
       expect.objectContaining({ customerId: 'cus_123' }),
     );
   });
+
   it.each([
     { ...input, messages: [] },
     { ...input, role: 'assistant' },
@@ -70,6 +74,7 @@ describe('Conversation HTTP boundary', () => {
     await response.text();
     expect(service.send).not.toHaveBeenCalled();
   });
+
   it.each(['x'.repeat(102_400), '🐈'.repeat(30_000)])(
     'enforces the byte limit before authentication',
     async (ignored) => {

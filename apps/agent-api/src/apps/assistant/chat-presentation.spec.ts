@@ -17,6 +17,7 @@ const approval = {
   address: proposal.address,
   expiresAt: proposal.expiresAt,
 };
+
 async function project(chunks: UIMessageChunk[]) {
   const stream = publicChatStream(
     new ReadableStream({

@@ -59,6 +59,7 @@ export function publicChatStream(
 ): ReadableStream<UIMessageChunk> {
   const tools = new Map<string, string>();
   let previousActivity: ChatActivity['activity'] | undefined;
+
   function activity(
     value: ChatActivity['activity'],
     controller: TransformStreamDefaultController<UIMessageChunk>,
