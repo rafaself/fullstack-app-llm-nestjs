@@ -5,9 +5,11 @@ export async function createMigratedDataSource(
   options?: DataSourceOptions,
 ): Promise<DataSource> {
   if (!options) throw new Error('Database options are required.');
-  const dataSource = await new DataSource(options).initialize();
+  const { migrateOnStart = true, ...dataSourceOptions } =
+    options as DataSourceOptions & { migrateOnStart?: boolean };
+  const dataSource = await new DataSource(dataSourceOptions).initialize();
   try {
-    await migrateDatabase(dataSource);
+    if (migrateOnStart) await migrateDatabase(dataSource);
     return dataSource;
   } catch (error) {
     await dataSource.destroy();

@@ -1,15 +1,31 @@
 import { AgentFunction, type AgentFunctionContext } from '@nestjs/ai';
 import {
   ForbiddenException,
+  Inject,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { z } from 'zod';
-import { PaymentsService } from './payments.service.js';
+
+export interface RefundIssuer {
+  refundOrder(
+    customerId: string,
+    orderId: string,
+    idempotencyKey: string,
+    refundRequestId: string,
+  ): Promise<{
+    paymentId: string;
+    amountCents: number;
+    idempotencyKey: string;
+    status: 'simulated';
+  }>;
+}
+
+export const REFUND_ISSUER = Symbol('REFUND_ISSUER');
 
 @Injectable()
 export class RefundTools {
-  constructor(private readonly payments: PaymentsService) {}
+  constructor(@Inject(REFUND_ISSUER) private readonly issuer: RefundIssuer) {}
 
   @AgentFunction({
     name: 'issue-refund',
@@ -47,7 +63,7 @@ export class RefundTools {
         'Refund order must match the original request.',
       );
     }
-    return this.payments.refundOrder(
+    return this.issuer.refundOrder(
       customerId,
       refundOrderId,
       context.idempotencyKey,

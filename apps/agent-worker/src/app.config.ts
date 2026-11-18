@@ -3,6 +3,8 @@ import { resolve } from 'node:path';
 import {
   readEnvironment,
   loadLoggerConfig,
+  loadAuthConfig,
+  loadBusinessApiUrl,
   loadWorkflowConfig,
   loadDatabaseConfig,
   loadQueueConfig,
@@ -14,9 +16,11 @@ import { createWorkerConfig } from './config/worker.config';
 const environment = readEnvironment(resolve(__dirname, '../../../.env'));
 export const aiConfig = createAiConfig(loadAiConfig(environment));
 export const workerConfig = createWorkerConfig({
-  database: loadDatabaseConfig(environment),
+  database: loadDatabaseConfig(environment, 'worker'),
   queue: loadQueueConfig(environment),
   mailpit: loadMailpitConfig(environment),
+  businessApiUrl: loadBusinessApiUrl(environment),
+  auth: loadAuthConfig(environment),
 });
 
 export const workflowsConfig = createWorkflowsConfig(

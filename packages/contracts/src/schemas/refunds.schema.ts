@@ -57,6 +57,24 @@ export const refundDecisionResponseSchema = z
   })
   .strict();
 
+export const internalRefundRequestSchema = z
+  .object({
+    customerId: z.string().min(1).max(80),
+    orderId: z.string().min(1).max(80),
+    idempotencyKey: z.string().min(1).max(200),
+    refundRequestId: z.string().min(1).max(200),
+  })
+  .strict();
+
+export const internalRefundResponseSchema = z
+  .object({
+    paymentId: z.string().min(1),
+    amountCents: z.number().int().positive(),
+    idempotencyKey: z.string().min(1),
+    status: z.literal('simulated'),
+  })
+  .strict();
+
 export type RefundRequest = z.infer<typeof refundRequestSchema>;
 export type RefundDecision = z.infer<typeof refundDecisionSchema>;
 export type RefundWorkflowStatus = z.infer<typeof refundWorkflowStatusSchema>;
@@ -64,4 +82,8 @@ export type RefundRequestResponse = z.infer<typeof refundRequestResponseSchema>;
 export type PendingRefundApproval = z.infer<typeof pendingRefundApprovalSchema>;
 export type RefundDecisionResponse = z.infer<
   typeof refundDecisionResponseSchema
+>;
+export type InternalRefundRequest = z.infer<typeof internalRefundRequestSchema>;
+export type InternalRefundResponse = z.infer<
+  typeof internalRefundResponseSchema
 >;

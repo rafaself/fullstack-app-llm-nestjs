@@ -40,11 +40,15 @@ export {
   refundDecisionSchema,
   refundRequestResponseSchema,
   refundRequestSchema,
+  internalRefundRequestSchema,
+  internalRefundResponseSchema,
   type RefundDecision,
   type RefundDecisionResponse,
   type PendingRefundApproval,
   type RefundRequest,
   type RefundRequestResponse,
+  type InternalRefundRequest,
+  type InternalRefundResponse,
   type RefundWorkflowStatus,
 } from './schemas/refunds.schema.js';
 

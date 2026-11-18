@@ -56,6 +56,9 @@
       "path": "./apps/agent-api/tsconfig.app.json"
     },
     {
+      "path": "./apps/db-migrator/tsconfig.json"
+    },
+    {
       "path": "./packages/http/tsconfig.json"
     }
   ]

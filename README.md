@@ -70,9 +70,11 @@ The local Compose stack uses Linux host networking, with each service explicitly
 When switching an existing stack from bridge networking, run `docker compose down` (without `--volumes`), followed by `docker compose up -d --build --force-recreate --wait`. Named volumes and stored data are preserved.
 Existing database volumes created before the test database initialization was
 added may need `docker compose exec db createdb -U chatbot chatbot_test` once.
-The API and worker apply tracked SQL migrations at startup and seed two demo customers,
-sample orders, payments, and products. Product embeddings are generated on
-demand with `POST /catalog/index`; the route requires the support bearer token.
+Local API and worker startup applies tracked SQL migrations and seeds two demo
+customers, sample orders, payments, and products. Production migrations run
+through the dedicated `chatbot_migrator` role before application instances
+start. Product embeddings are generated on demand with `POST /catalog/index`;
+the route requires the support bearer token.
 
 The example uses `DEMO_CUSTOMER_TOKEN` for the seeded `cus_123` identity and
 `SUPPORT_APPROVAL_TOKEN` for refund review, catalog indexing, and email jobs. The web app
@@ -109,7 +111,9 @@ For manual API testing, import the [Insomnia collection](insomnia/agent-api.inso
 ### Agent-to-business boundary
 
 Set `BUSINESS_API_URL` on the Agent API to the reachable Business API origin
-(default `http://127.0.0.1:3000`). Agent API requires `DATABASE_URL` for conversation storage. It does not need Redis, Mailpit, workflow encryption, or demo token configuration. It validates chat
+(default `http://127.0.0.1:3000`). In production, give Agent API
+`AGENT_DATABASE_URL` for conversation storage. It does not need Redis, Mailpit,
+workflow encryption, or demo token configuration. It validates chat
 credentials through `GET /agent-tools/customer` before starting a model call.
 The typed client forwards the original Authorization header to the Business API;
 it never sends a customer ID selected by the model.
@@ -147,7 +151,10 @@ It does not execute workflows. The worker runs refund workflows, calls the model
 and issues approved simulated refunds. Requests and approval decisions remain in
 PostgreSQL while the worker is offline and resume when it returns.
 
-Both processes must use the same `DATABASE_URL` and `WORKFLOWS_ENCRYPTION_KEY`.
+Both processes use the same PostgreSQL database and `WORKFLOWS_ENCRYPTION_KEY`,
+with separate Business API and Agent Worker database roles. The worker sends an
+authenticated refund command to `POST /internal/refunds`; payment and order
+mutations remain inside the Business API.
 Use a secret manager in production and make the key available before either
 process starts. The workflow names, versions, and encryption key ID remain
 unchanged, so existing pending refunds can resume after this split. Keep the key
@@ -155,6 +162,55 @@ stable for persisted workflows; changing it requires a deliberate encryption-key
 migration. Deploy compatible API and worker versions together. Stop old API
 instances that still execute workflows before starting the new worker to avoid
 mixed execution during the transition.
+
+### Least-privilege PostgreSQL roles
+
+The three services may use the same PostgreSQL database, but production must
+use separate login roles. The migration job uses a fourth role. Run
+[`infra/postgres-roles.sql`](infra/postgres-roles.sql) as a database administrator
+while connected to the application's dedicated database. The script installs
+pgvector if needed, creates the roles, removes public schema/database `CREATE`
+rights, and transfers existing application and workflow objects to the
+migration role. Review that scope first if the database is shared with another
+application.
+
+The SQL roles are created as `NOLOGIN` and without administrative privileges.
+Enable `LOGIN` and set passwords through your secret manager or an interactive
+`psql` session; do not put passwords in the checked-in SQL file. Use these
+connections in production:
+
+- `BUSINESS_DATABASE_URL`: `chatbot_business` reads and mutates customer,
+  catalog, order, payment, refund, address-confirmation, and throttler data. It
+  reads email drafts and reads/writes durable workflow state.
+- `AGENT_DATABASE_URL`: `chatbot_agent` reads and mutates only conversation,
+  turn, tool-execution, and approval tables, plus the shared
+  `throttler_rate_limits` infrastructure table.
+- `WORKER_DATABASE_URL`: `chatbot_worker` reads/inserts email drafts and
+  reads/writes durable workflow state. It has no order, payment, or conversation
+  table permissions; refunds go through the authenticated Business API route.
+- `MIGRATION_DATABASE_URL`: `chatbot_migrator` owns application tables, applies
+  the tracked SQL migrations, and migrates the workflow schema.
+
+Set a distinct random `WORKER_API_TOKEN` (at least 32 characters) on the
+Business API and Agent Worker. Set `BUSINESS_API_URL` on the worker to the
+reachable Business API origin. Keep `MIGRATION_DATABASE_URL` only on the
+one-off deployment migration job. Run `pnpm db:migrate` successfully before
+starting or updating application instances; production startup validates the
+schema but does not run migrations. `pnpm db:migrate` falls back to local
+`DATABASE_URL` (or the existing localhost default) outside production.
+
+For a fresh deployment, provision roles with the SQL file, enable their login
+credentials, run the migration command as `chatbot_migrator`, then deploy the
+services with their individual URLs. The SQL migrations apply table grants to
+each runtime role, and the migration command applies workflow-schema grants.
+When a future migration adds a table, add its explicit role grants in the same
+migration. Local development keeps the shared `DATABASE_URL` and startup
+migrations, so the existing Compose setup needs no role provisioning.
+
+Run `pnpm test:e2e` against the local PostgreSQL test database to verify the
+role boundaries. The database-access integration test sets each role on a
+session and checks that its permitted tables work while cross-domain reads and
+mutations fail with PostgreSQL `42501` permission errors.
 
 ### Email drafting
 
@@ -252,8 +308,9 @@ settings. For services hosted elsewhere, set `DATABASE_URL`,
   point defines the stable persisted email job identity used by both producer
   and worker, keeping Node crypto out of the browser-safe schema entry point.
 - `packages/database` owns TypeORM entities, connection options, and the
-  existing SQL migration. It has no Nest dependency. The API configures
-  TypeORM and runs the migration at startup with the existing migration ledger.
+  SQL migration ledger. It has no Nest dependency. The migration job applies
+  tracked changes; local application startup retains the existing migration
+  behavior.
 - `packages/workflow-storage` provides shared workflow configuration and a
   Nest persistence module with a dedicated PostgreSQL pool.
 - `packages/http` provides shared request logging middleware for both HTTP APIs.
@@ -290,7 +347,13 @@ Both HTTP APIs also use [shared request logging](packages/http/README.md), regis
 
 ### Chat streaming and resource limits
 
-The Agent API owns conversation history in PostgreSQL. Run the normal migrations before deploying; startup also applies pending migrations with the existing migration lock. Migration `005-conversations` adds customer-owned conversations, ordered turns (user text, model messages and UI snapshots), tool executions, and approval state. Migration `006-conversation-approval-index` indexes approval reads and recovery by conversation and status. Existing browser-only chats are not imported.
+The Agent API owns conversation history in PostgreSQL. Run `pnpm db:migrate`
+before deploying; production startup checks the migrated schema without
+applying changes. Migration `005-conversations` adds customer-owned
+conversations, ordered turns (user text, model messages and UI snapshots), tool
+executions, and approval state. Migration `006-conversation-approval-index`
+indexes approval reads and recovery by conversation and status. Existing
+browser-only chats are not imported.
 
 - `POST /assistant/conversations` with `{}` creates a conversation.
 - `GET /assistant/conversations` lists the customer's latest 50 conversations.
@@ -310,6 +373,6 @@ PostgreSQL session advisory locks serialize each conversation across Agent API i
 
 Browser disconnects stop delivery, not execution. The server drains generation, saves its result and releases admission after persistence. The frontend stores the conversation ID locally and reloads server history on startup, completion, errors and disconnects. Stop means stop receiving; active execution is recovered by polling. Partial text is not checkpointed token by token; after a process crash history recovers completed operations and an interrupted status. Slow readers detach once their response queue exceeds 256 KiB. The installed AI library also retains its generation chunks internally, so this queue bound is not a total memory guarantee.
 
-Each generation allows four model calls and a two-minute execution deadline. Per-process limits remain one generation per customer and 20 total (429/503 on saturation); cross-instance serialization is per conversation. The Agent API connection pool allows 30 connections, including the connections held by generations. Explicit approvals have a separate five-operation per-process admission limit (503 when full), leaving pool headroom alongside the 20-generation limit. Database acquisition retains its five-second timeout. PostgreSQL statements time out after 10 seconds, lock waits after two seconds, and the driver bounds query waits at 15 seconds. These query bounds also apply to startup migrations; large migrations should run separately with suitable maintenance timeouts. The generation deadline does not cancel an in-flight database query; finalization waits are bounded by the database timeouts. Conversations allow 40 model turns and a 100,000-character serialized model-context limit; start a new conversation when full. Explicit approvals remain available at that limit. Shutdown aborts and waits for active generation finalization. A crashed process is recovered on the next conversation access; there is no background executor or automatic provider retry after a crash.
+Each generation allows four model calls and a two-minute execution deadline. Per-process limits remain one generation per customer and 20 total (429/503 on saturation); cross-instance serialization is per conversation. The Agent API connection pool allows 30 connections, including the connections held by generations. Explicit approvals have a separate five-operation per-process admission limit (503 when full), leaving pool headroom alongside the 20-generation limit. Database acquisition retains its five-second timeout. PostgreSQL statements time out after 10 seconds, lock waits after two seconds, and the driver bounds query waits at 15 seconds. These query bounds also apply to local startup migrations; production migrations run separately with suitable maintenance timeouts. The generation deadline does not cancel an in-flight database query; finalization waits are bounded by the database timeouts. Conversations allow 40 model turns and a 100,000-character serialized model-context limit; start a new conversation when full. Explicit approvals remain available at that limit. Shutdown aborts and waits for active generation finalization. A crashed process is recovered on the next conversation access; there is no background executor or automatic provider retry after a crash.
 
 Offline unit tests cover strict contracts, byte limits, detached delivery, capacity, deadlines and shutdown. PostgreSQL integration tests cover ownership, idempotency, cross-instance exclusion, tool journaling, interrupted execution recovery, dedicated approvals and multi-turn context. Run `pnpm test` and `pnpm test:e2e` with the documented local services. These checks do not establish live-provider behavior or a production throughput/memory ceiling.

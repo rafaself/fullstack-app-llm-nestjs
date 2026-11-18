@@ -31,7 +31,9 @@ export class IdentityThrottlerGuard extends ThrottlerGuard {
       const scope =
         authenticated.user?.rateLimitScope === 'support'
           ? 'support'
-          : 'customer';
+          : authenticated.user?.rateLimitScope === 'service'
+            ? 'service'
+            : 'customer';
       return `${scope}:${id}`;
     }
     return super.getTracker(request);

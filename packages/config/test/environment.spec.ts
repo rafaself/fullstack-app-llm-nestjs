@@ -3,6 +3,7 @@ import { validateEnvironment } from '../src/environment.js';
 import { loadMailpitConfig, loadQueueConfig } from '../src/jobs.js';
 import { loadAiProviderConfig } from '../src/ai.js';
 import { loadWorkflowConfig } from '../src/workflows.js';
+import { loadAuthConfig } from '../src/auth.js';
 
 const bedrockEnvironment = {
   AWS_BEARER_TOKEN_BEDROCK: 'test-token',
@@ -161,12 +162,17 @@ describe('validateEnvironment', () => {
         json: false,
         logLevels: ['debug', 'log', 'warn', 'error', 'fatal'],
       },
-      auth: { demoCustomerToken: undefined, supportApprovalToken: undefined },
+      auth: {
+        demoCustomerToken: undefined,
+        supportApprovalToken: undefined,
+        workerApiToken: undefined,
+      },
       database: {
         connectionString:
           'postgresql://chatbot:chatbot@127.0.0.1:15432/chatbot',
         max: 10,
         connectionTimeoutMillis: 5_000,
+        migrationsOnStart: true,
       },
       workflows: {
         encryptionKey: workflowKey,
@@ -215,6 +221,8 @@ describe('validateEnvironment', () => {
       validateEnvironment({
         ...bedrockEnvironment,
         NODE_ENV: 'production',
+        BUSINESS_DATABASE_URL: 'postgresql://app:secret@db:5432/app',
+        WORKER_API_TOKEN: 'p'.repeat(32),
       }),
     ).toThrow('WORKFLOWS_ENCRYPTION_KEY');
     expect(() =>
@@ -222,6 +230,8 @@ describe('validateEnvironment', () => {
         ...bedrockEnvironment,
         NODE_ENV: 'production',
         WORKFLOWS_ENCRYPTION_KEY: workflowKey,
+        BUSINESS_DATABASE_URL: 'postgresql://app:secret@db:5432/app',
+        WORKER_API_TOKEN: 'p'.repeat(32),
       }),
     ).toThrow('must not use the example key in production');
   });
@@ -274,5 +284,26 @@ describe('workflow encryption configuration', () => {
         WORKFLOWS_ENCRYPTION_KEY: exampleKey,
       }),
     ).toThrow('must not use the example key in production');
+  });
+});
+
+describe('worker API authentication configuration', () => {
+  it('requires a strong worker token in production', () => {
+    expect(() =>
+      loadAuthConfig({ NODE_ENV: 'production', WORKER_API_TOKEN: 'short' }),
+    ).toThrow('WORKER_API_TOKEN');
+    expect(
+      loadAuthConfig({
+        NODE_ENV: 'production',
+        WORKER_API_TOKEN: 'w'.repeat(32),
+      }).workerApiToken,
+    ).toBe('w'.repeat(32));
+    expect(() =>
+      loadAuthConfig({
+        NODE_ENV: 'production',
+        DEMO_CUSTOMER_TOKEN: 'w'.repeat(32),
+        WORKER_API_TOKEN: 'w'.repeat(32),
+      }),
+    ).toThrow('must differ from customer and support tokens');
   });
 });

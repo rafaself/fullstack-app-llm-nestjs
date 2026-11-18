@@ -1,0 +1,21 @@
+{
+  "name": "@cat-supplies-store/db-migrator",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "migrate": "node dist/main.js"
+  },
+  "dependencies": {
+    "@cat-supplies-store/database": "workspace:*",
+    "@nestjs/workflows": "^0.0.5",
+    "pg": "8.23.1",
+    "typeorm": "1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "8.23.1",
+    "typescript": "^6.0.2"
+  }
+}

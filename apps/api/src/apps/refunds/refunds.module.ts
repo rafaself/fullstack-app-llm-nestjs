@@ -11,16 +11,20 @@ import {
 } from '../../auth/demo-auth.guard';
 import { RefundsController } from './refunds.controller';
 import { RefundsService } from './refunds.service';
+import { InternalRefundsController } from './internal-refunds.controller';
+import { PaymentsModule } from '@cat-supplies-store/refunds';
+import { WorkerAuthGuard } from '../../auth/worker-auth.guard';
 
 @Module({
-  imports: [AiWorkflowsModule, OrdersModule],
-  controllers: [RefundsController],
+  imports: [AiWorkflowsModule, OrdersModule, PaymentsModule],
+  controllers: [RefundsController, InternalRefundsController],
   providers: [
     RefundsService,
     DemoCustomerGuard,
     SupportApprovalGuard,
     IpThrottlerGuard,
     IdentityThrottlerGuard,
+    WorkerAuthGuard,
   ],
 })
 export class RefundsModule {}

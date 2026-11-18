@@ -1,4 +1,6 @@
 import {
+  loadAuthConfig,
+  loadBusinessApiUrl,
   loadDatabaseConfig,
   loadQueueConfig,
   loadMailpitConfig,
@@ -16,15 +18,18 @@ describe('worker configuration', () => {
       MAILPIT_URL: 'http://mailpit:8025',
     };
     const config = createWorkerConfig({
-      database: loadDatabaseConfig(environment),
+      database: loadDatabaseConfig(environment, 'worker'),
       queue: loadQueueConfig(environment),
       mailpit: loadMailpitConfig(environment),
+      businessApiUrl: loadBusinessApiUrl(environment),
+      auth: loadAuthConfig(environment),
     });
     expect(config.KEY).toBe(workerConfigKey);
     expect(config()).toMatchObject({
       database: { connectionString: 'postgresql://test:test@db:5432/jobs' },
       queue: { host: 'queue', port: 6379 },
       mailpit: { url: 'http://mailpit:8025' },
+      businessApiUrl: 'http://127.0.0.1:3000',
     });
     expect(process.env).toEqual(before);
   });

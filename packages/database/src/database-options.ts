@@ -15,7 +15,8 @@ export function databaseOptions(options: {
   connectionString: string;
   max?: number;
   connectionTimeoutMillis?: number;
-}): DataSourceOptions {
+  migrationsOnStart?: boolean;
+}): DataSourceOptions & { migrateOnStart: boolean } {
   return {
     type: 'postgres',
     url: options.connectionString,
@@ -37,5 +38,6 @@ export function databaseOptions(options: {
       max: options.max,
       connectionTimeoutMillis: options.connectionTimeoutMillis,
     },
-  };
+    migrateOnStart: options.migrationsOnStart ?? true,
+  } as DataSourceOptions & { migrateOnStart: boolean };
 }

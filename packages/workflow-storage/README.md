@@ -1,6 +1,6 @@
 # @cat-supplies-store/workflow-storage
 
-Shared PostgreSQL infrastructure for Nest workflows, used by the Business API and Agent Worker. `WorkflowPersistenceModule` provides the workflow store through a dedicated connection pool that closes on application shutdown.
+Shared PostgreSQL infrastructure for Nest workflows, used by the Business API and Agent Worker. `WorkflowPersistenceModule` provides the workflow store through a dedicated connection pool that closes on application shutdown. Local development migrates at startup; production checks schema readiness without changing it. The `pnpm db:migrate` command applies workflow schema migrations as `chatbot_migrator` and grants access to the Business API and Worker roles.
 
 - `createWorkflowsConfig` registers parsed workflow settings.
 - `buildWorkflowOptions` configures worker execution, retries, and encrypted payloads.

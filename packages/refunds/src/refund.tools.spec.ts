@@ -1,7 +1,6 @@
 import type { AgentFunctionContext } from '@nestjs/ai';
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
-import { PaymentsService } from './payments.service.js';
 import { RefundTools } from './refund.tools.js';
 
 function context(
@@ -25,9 +24,13 @@ function context(
 }
 
 function setup() {
-  const refundOrder = vi.fn().mockResolvedValue({ status: 'simulated' });
-  const payments = { refundOrder } as unknown as PaymentsService;
-  return { refundOrder, tools: new RefundTools(payments) };
+  const refundOrder = vi.fn().mockResolvedValue({
+    paymentId: 'pay_123',
+    amountCents: 4599,
+    idempotencyKey: 'durable-refund-key',
+    status: 'simulated',
+  });
+  return { refundOrder, tools: new RefundTools({ refundOrder }) };
 }
 
 const input = { orderId: 'ord_123', reason: 'The item arrived damaged.' };
@@ -96,7 +99,12 @@ describe('RefundTools authorization', () => {
           refundRequestId: 'refund-123',
         }),
       ),
-    ).resolves.toEqual({ status: 'simulated' });
+    ).resolves.toEqual({
+      paymentId: 'pay_123',
+      amountCents: 4599,
+      idempotencyKey: 'durable-refund-key',
+      status: 'simulated',
+    });
     expect(refundOrder).toHaveBeenCalledExactlyOnceWith(
       'cus_123',
       'ord_123',

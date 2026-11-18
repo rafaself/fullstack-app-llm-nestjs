@@ -10,7 +10,11 @@ export const postgresWorkflowStoreProvider: Provider = {
   inject: [WORKFLOW_DATABASE_POOL, WorkflowStorage],
   useFactory: (pool: Pool, storage: WorkflowStorage) =>
     new PostgresWorkflowStore(
-      { executor: fromPg(pool), migrate: true },
+      {
+        executor: fromPg(pool),
+        migrate: (pool as Pool & { migrationsOnStart?: boolean })
+          .migrationsOnStart,
+      },
       storage,
     ),
 };

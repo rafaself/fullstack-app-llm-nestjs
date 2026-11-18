@@ -3,6 +3,7 @@ export {
   WORKFLOW_DATABASE_POOL,
 } from './postgres-workflow-store.provider.js';
 export { WorkflowPersistenceModule } from './workflow-persistence.module.js';
+export type { WorkflowPersistenceOptions } from './workflow-persistence.definition.js';
 export { WorkflowPool } from './workflow-pool.js';
 export {
   createWorkflowsConfig,

@@ -12,6 +12,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { buildAiOptions } from '@cat-supplies-store/ai';
 import { createMigratedDataSource } from '@cat-supplies-store/database';
+import { WorkerBusinessApiRefundIssuer } from './apps/refunds/worker-business-api-refund-issuer.js';
 import {
   buildWorkerDatabaseOptions,
   buildWorkerQueueOptions,
@@ -49,9 +50,12 @@ import {
     }),
     WorkflowPersistenceModule.registerAsync({
       inject: [workerConfig.KEY],
-      useFactory: (config: WorkerConfig) => config.database,
+      useFactory: (config: WorkerConfig) => ({
+        ...config.database,
+        migrationsOnStart: config.database.migrationsOnStart,
+      }),
     }),
-    RefundExecutionModule,
+    RefundExecutionModule.register(WorkerBusinessApiRefundIssuer),
     EmailModule,
     SupportModule,
   ],

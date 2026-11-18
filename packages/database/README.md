@@ -2,7 +2,9 @@
 
 Shared PostgreSQL persistence foundations for the Business API, Agent API and Agent Worker: TypeORM entities for customers, orders, payments, refunds, products, email drafts, conversations, turns, tool executions, and approvals, plus connection options and SQL migrations.
 
-`databaseOptions` configures the entities with schema synchronization disabled. `createMigratedDataSource` initializes a connection and applies pending migrations. `migrateDatabase` records applied migrations in `schema_migrations` and serializes migration execution with a PostgreSQL advisory lock.
+`databaseOptions` configures the entities with schema synchronization disabled. `createMigratedDataSource` initializes a connection and applies pending migrations when configured to do so. Local startup retains that behavior; production disables it and uses `pnpm db:migrate` with `MIGRATION_DATABASE_URL`. `migrateDatabase` records applied migrations in `schema_migrations` and serializes migration execution with a PostgreSQL advisory lock.
+
+`infra/postgres-roles.sql` creates the Business API, Agent API, Agent Worker, and migration roles and transfers existing objects to the migration role. Migration `009-application-role-grants` applies the table-level permissions for each service. The migration CLI also applies the workflow schema migrations and grants workflow access to the Business API and Worker. Add grants to the relevant migration whenever a new application table is introduced.
 
 This package has no Nest dependency. Feature repositories and business rules live with their owning application or domain package.
 

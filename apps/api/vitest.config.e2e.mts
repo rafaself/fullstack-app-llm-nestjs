@@ -26,6 +26,7 @@ export default defineConfig({
       MAILPIT_URL: process.env.MAILPIT_URL ?? 'http://127.0.0.1:18025',
       DEMO_CUSTOMER_TOKEN: 'test-customer-token',
       SUPPORT_APPROVAL_TOKEN: 'test-support-token',
+      WORKER_API_TOKEN: 'test-worker-token',
       WORKFLOWS_ENCRYPTION_KEY: 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=',
     },
   },

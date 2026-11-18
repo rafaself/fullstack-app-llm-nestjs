@@ -42,7 +42,10 @@ import {
     }),
     WorkflowPersistenceModule.registerAsync({
       inject: [databaseConfig.KEY],
-      useFactory: (config: DatabaseConfig) => config,
+      useFactory: (config: DatabaseConfig) => ({
+        ...config,
+        migrationsOnStart: config.migrationsOnStart,
+      }),
     }),
     BullModule.forRootAsync({
       inject: [queueConfig.KEY],

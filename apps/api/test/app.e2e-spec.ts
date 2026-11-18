@@ -17,6 +17,7 @@ import { ConfigService } from '@nestjs/config';
 import { AppModule as WorkerModule } from '../../agent-worker/src/app.module';
 import { DataSource } from 'typeorm';
 import { PaymentsService } from '@cat-supplies-store/refunds';
+import type { WorkerConfig } from '../../agent-worker/src/config/worker.config';
 import { randomUUID } from 'node:crypto';
 import { readUIMessageStream, type UIMessage, type UIMessageChunk } from 'ai';
 import {
@@ -49,7 +50,6 @@ describe('Cat store API (e2e)', () => {
   beforeAll(async () => {
     fakeModel = new FakeModel(['Hello from the offline fake model.']);
     app = await createApp();
-    await app.listen(0, '127.0.0.1');
     const builder = Test.createTestingModule({ imports: [AgentModule] });
     const fixture = await overrideModels(builder, {
       default: fakeModel,
@@ -114,6 +114,15 @@ describe('Cat store API (e2e)', () => {
       .post('/refunds')
       .send({ orderId: 'ord_123', reason: 'Customer request.' })
       .expect(401);
+    await request(app.getHttpServer())
+      .post('/internal/refunds')
+      .send({})
+      .expect(401);
+    await request(app.getHttpServer())
+      .post('/internal/refunds')
+      .set('Authorization', 'Bearer invalid-worker-token')
+      .send({})
+      .expect(401);
     await request(app.getHttpServer()).post('/catalog/index').expect(401);
     await request(app.getHttpServer())
       .get('/refunds/unknown/approvals')
@@ -135,6 +144,11 @@ describe('Cat store API (e2e)', () => {
       .post('/refunds/unknown/approvals/key')
       .set('Authorization', 'Bearer test-support-token')
       .send({ approved: false, reason: '  ' })
+      .expect(400);
+    await request(app.getHttpServer())
+      .post('/internal/refunds')
+      .set('Authorization', 'Bearer test-worker-token')
+      .send({ orderId: 'ord_123' })
       .expect(400);
     await request(app.getHttpServer())
       .get('/catalog/search')
@@ -752,7 +766,7 @@ describe('Cat store API (e2e)', () => {
       "SELECT idempotency_key FROM payment_refunds WHERE payment_id = 'pay_123'",
     );
     await expect(
-      worker!
+      app
         .get(PaymentsService)
         .refundOrder('cus_123', 'ord_123', refund[0]!.idempotency_key),
     ).resolves.toMatchObject({ status: 'simulated', amountCents: 4599 });
@@ -831,7 +845,7 @@ describe('Cat store API (e2e)', () => {
       `);
       triggerCreated = true;
 
-      const payments = worker!.get(PaymentsService);
+      const payments = app.get(PaymentsService);
       await expect(
         payments.refundOrder('cus_123', orderId, idempotencyKey),
       ).rejects.toThrow('Simulated order refund write failure');
@@ -907,7 +921,7 @@ describe('Cat store API (e2e)', () => {
       );
 
       try {
-        const payments = worker!.get(PaymentsService);
+        const payments = app.get(PaymentsService);
         const first = () =>
           payments.refundOrder('cus_123', orderId, `first-${suffix}`);
         const second = () =>
@@ -1006,6 +1020,10 @@ describe('Cat store API (e2e)', () => {
     const builder = Test.createTestingModule({ imports: [WorkerModule] });
     const context = await overrideModels(builder, { default: model }).compile();
     try {
+      const config = context
+        .get(ConfigService)
+        .getOrThrow<WorkerConfig>('worker');
+      config.businessApiUrl = await app.getUrl();
       await context.init();
       return context;
     } catch (error) {
@@ -1026,6 +1044,7 @@ describe('Cat store API (e2e)', () => {
     const application = moduleFixture.createNestApplication();
     try {
       await application.init();
+      await application.listen(0, '127.0.0.1');
       return application;
     } catch (error) {
       await application.close();

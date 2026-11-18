@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { DataSourceOptions } from 'typeorm';
 
 const mocks = vi.hoisted(() => ({
   initialize: vi.fn(),
@@ -49,6 +50,17 @@ describe('migrated data source', () => {
       failure,
     );
     expect(mocks.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns the initialized connection without running migrations when disabled', async () => {
+    await expect(
+      createMigratedDataSource({
+        type: 'postgres',
+        migrateOnStart: false,
+      } as DataSourceOptions & { migrateOnStart: boolean }),
+    ).resolves.toBe(dataSource);
+    expect(mocks.migrate).not.toHaveBeenCalled();
+    expect(mocks.initialize).toHaveBeenCalledOnce();
   });
 
   it('rejects missing options before initializing a connection', async () => {

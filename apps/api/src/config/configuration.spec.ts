@@ -24,12 +24,14 @@ describe('configuration without environment mutations', () => {
         envFile,
         [
           'DATABASE_URL=postgresql://test:test@file-host:5432/file-db',
+          'BUSINESS_DATABASE_URL=postgresql://business:secret@file-host:5432/file-db',
           'AWS_REGION=us-west-2',
           'AWS_BEARER_TOKEN_BEDROCK=file-token',
           'ANTHROPIC_API_KEY=file-anthropic-key',
           'OPENAI_API_KEY=file-openai-key',
           'REDIS_PORT=17379',
           'NODE_ENV=production',
+          `WORKER_API_TOKEN=${'w'.repeat(32)}`,
           'LOG_LEVEL=error',
           `WORKFLOWS_ENCRYPTION_KEY=${Buffer.alloc(32, 0x42).toString('base64')}`,
         ].join('\n'),
@@ -54,7 +56,8 @@ describe('configuration without environment mutations', () => {
       }).compile();
       try {
         expect(module.get(database.KEY)).toMatchObject({
-          connectionString: 'postgresql://test:test@file-host:5432/file-db',
+          connectionString:
+            'postgresql://business:secret@file-host:5432/file-db',
         });
         expect(module.get(ai.KEY)).toMatchObject({
           providers: {

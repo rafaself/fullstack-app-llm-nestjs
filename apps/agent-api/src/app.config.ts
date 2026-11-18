@@ -18,7 +18,7 @@ export const appConfigOptions = {
   validate: () => ({
     api: loadApiConfig({ ...environment, PORT: agent.port }),
     logger: loadLoggerConfig(environment),
-    database: loadDatabaseConfig(environment),
+    database: loadDatabaseConfig(environment, 'agent'),
     businessApi: { url: agent.businessApiUrl },
   }),
   load: [aiConfig],

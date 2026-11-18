@@ -7,6 +7,7 @@ import * as conversations from './migrations/005-conversations.js';
 import * as oneRefundPerPayment from './migrations/004-one-refund-per-payment.js';
 import * as orderRefundLifecycle from './migrations/007-order-refund-lifecycle.js';
 import * as throttlerRateLimits from './migrations/008-throttler-rate-limits.js';
+import * as applicationRoleGrants from './migrations/009-application-role-grants.js';
 
 export async function migrateDatabase(dataSource: DataSource): Promise<void> {
   const runner = dataSource.createQueryRunner();
@@ -26,6 +27,7 @@ export async function migrateDatabase(dataSource: DataSource): Promise<void> {
       conversationApprovalIndex,
       orderRefundLifecycle,
       throttlerRateLimits,
+      applicationRoleGrants,
     ]) {
       const applied = await runner.query(
         'SELECT 1 FROM schema_migrations WHERE name = $1',

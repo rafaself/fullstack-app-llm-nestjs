@@ -1,11 +1,23 @@
-import { Module } from '@nestjs/common';
+import { Module, type DynamicModule, type Type } from '@nestjs/common';
 import { AiWorkflowsModule } from '@nestjs/ai/workflows';
-import { PaymentsModule } from './payments.module.js';
 import { RefundRequestWorkflow } from './refund.workflow.js';
-import { RefundTools } from './refund.tools.js';
+import {
+  REFUND_ISSUER,
+  RefundTools,
+  type RefundIssuer,
+} from './refund.tools.js';
 
-@Module({
-  imports: [AiWorkflowsModule, PaymentsModule],
-  providers: [RefundRequestWorkflow, RefundTools],
-})
-export class RefundExecutionModule {}
+@Module({})
+export class RefundExecutionModule {
+  static register(issuer: Type<RefundIssuer>): DynamicModule {
+    return {
+      module: RefundExecutionModule,
+      imports: [AiWorkflowsModule],
+      providers: [
+        RefundRequestWorkflow,
+        RefundTools,
+        { provide: REFUND_ISSUER, useClass: issuer },
+      ],
+    };
+  }
+}
