@@ -31,7 +31,7 @@ describe('configuration without environment mutations', () => {
           'REDIS_PORT=17379',
           'NODE_ENV=production',
           'LOG_LEVEL=error',
-          'WORKFLOWS_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=',
+          `WORKFLOWS_ENCRYPTION_KEY=${Buffer.alloc(32, 0x42).toString('base64')}`,
         ].join('\n'),
       );
       const environment = readEnvironment(envFile, {
@@ -74,7 +74,7 @@ describe('configuration without environment mutations', () => {
         });
         expect(module.get(queue.KEY)).toMatchObject({ port: 17379 });
         expect(module.get(ConfigService).get('workflows.encryptionKey')).toBe(
-          'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=',
+          Buffer.alloc(32, 0x42).toString('base64'),
         );
         expect(module.get(ConfigService).get('logger')).toEqual({
           json: true,

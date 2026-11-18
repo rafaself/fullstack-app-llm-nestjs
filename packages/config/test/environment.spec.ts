@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { validateEnvironment } from '../src/environment.js';
 import { loadMailpitConfig, loadQueueConfig } from '../src/jobs.js';
 import { loadAiProviderConfig } from '../src/ai.js';
+import { loadWorkflowConfig } from '../src/workflows.js';
 
 const bedrockEnvironment = {
   AWS_BEARER_TOKEN_BEDROCK: 'test-token',
@@ -207,5 +208,71 @@ describe('validateEnvironment', () => {
         SUPPORT_APPROVAL_TOKEN: 'same-token',
       }),
     ).toThrow('Invalid environment configuration');
+  });
+
+  it('rejects missing and example workflow secrets in production configuration', () => {
+    expect(() =>
+      validateEnvironment({
+        ...bedrockEnvironment,
+        NODE_ENV: 'production',
+      }),
+    ).toThrow('WORKFLOWS_ENCRYPTION_KEY');
+    expect(() =>
+      validateEnvironment({
+        ...bedrockEnvironment,
+        NODE_ENV: 'production',
+        WORKFLOWS_ENCRYPTION_KEY: workflowKey,
+      }),
+    ).toThrow('must not use the example key in production');
+  });
+});
+
+describe('workflow encryption configuration', () => {
+  const exampleKey = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=';
+  const validProductionKey = Buffer.alloc(32, 0x42).toString('base64');
+
+  it('accepts a canonical Base64 key with exactly 32 decoded bytes', () => {
+    expect(
+      loadWorkflowConfig({
+        NODE_ENV: 'production',
+        WORKFLOWS_ENCRYPTION_KEY: validProductionKey,
+      }).encryptionKey,
+    ).toBe(validProductionKey);
+  });
+
+  it.each([
+    'not-a-key',
+    '***',
+    Buffer.alloc(31).toString('base64'),
+    Buffer.alloc(33).toString('base64'),
+  ])(
+    'rejects invalid Base64 or a key with the wrong decoded length: %s',
+    (key) => {
+      expect(() =>
+        loadWorkflowConfig({
+          NODE_ENV: 'production',
+          WORKFLOWS_ENCRYPTION_KEY: key,
+        }),
+      ).toThrow('WORKFLOWS_ENCRYPTION_KEY');
+    },
+  );
+
+  it('rejects a missing production key', () => {
+    expect(() => loadWorkflowConfig({ NODE_ENV: 'production' })).toThrow(
+      'WORKFLOWS_ENCRYPTION_KEY',
+    );
+  });
+
+  it('allows the example key locally and rejects it in production', () => {
+    expect(
+      loadWorkflowConfig({ WORKFLOWS_ENCRYPTION_KEY: exampleKey })
+        .encryptionKey,
+    ).toBe(exampleKey);
+    expect(() =>
+      loadWorkflowConfig({
+        NODE_ENV: 'production',
+        WORKFLOWS_ENCRYPTION_KEY: exampleKey,
+      }),
+    ).toThrow('must not use the example key in production');
   });
 });

@@ -78,10 +78,17 @@ The example uses `DEMO_CUSTOMER_TOKEN` for the seeded `cus_123` identity and
 `SUPPORT_APPROVAL_TOKEN` for refund review, catalog indexing, and email jobs. The web app
 reads `VITE_DEMO_CUSTOMER_TOKEN` from the root `.env`. These demo guards refuse
 requests when `NODE_ENV=production`; use a real authentication system before
-deploying. Generate a private `WORKFLOWS_ENCRYPTION_KEY` with
-`openssl rand -base64 32` before running locally. The sample payment service
-only records simulated, idempotent refunds in PostgreSQL; it has no payment
-provider integration.
+deploying. The example workflow key in `.env.example` keeps local development
+simple and is accepted only outside production. The Business API and Agent
+Worker require `WORKFLOWS_ENCRYPTION_KEY`; production startup rejects a missing
+key, an invalid key, or the example key. Generate a deployment secret with
+`openssl rand -base64 32`, which produces the required Base64 encoding of 32
+random bytes, and inject it through your secret manager. Keep the same secret
+available to the Business API and Agent Worker, and preserve it across
+deployments while encrypted workflows remain persisted. Do not commit
+production keys or generate a new key for each release. The Agent API does not
+use workflow encryption. The sample payment service only records simulated,
+idempotent refunds in PostgreSQL; it has no payment provider integration.
 
 ## Development
 
@@ -141,10 +148,13 @@ and issues approved simulated refunds. Requests and approval decisions remain in
 PostgreSQL while the worker is offline and resume when it returns.
 
 Both processes must use the same `DATABASE_URL` and `WORKFLOWS_ENCRYPTION_KEY`.
-The workflow names, versions, and encryption key ID remain unchanged, so existing
-pending refunds can resume after this split. Deploy compatible API and worker
-versions together. Stop old API instances that still execute workflows before
-starting the new worker to avoid mixed execution during the transition.
+Use a secret manager in production and make the key available before either
+process starts. The workflow names, versions, and encryption key ID remain
+unchanged, so existing pending refunds can resume after this split. Keep the key
+stable for persisted workflows; changing it requires a deliberate encryption-key
+migration. Deploy compatible API and worker versions together. Stop old API
+instances that still execute workflows before starting the new worker to avoid
+mixed execution during the transition.
 
 ### Email drafting
 
