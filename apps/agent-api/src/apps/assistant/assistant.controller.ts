@@ -7,7 +7,11 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
+import {
+  IdentityThrottlerGuard,
+  IpThrottlerGuard,
+} from '@cat-supplies-store/http';
 import {
   chatRequestSchema,
   conversationIdSchema,
@@ -21,11 +25,19 @@ import type { CustomerRequest } from '../../integrations/business-api/business-a
 import { ConversationService } from './conversation.service';
 
 @Controller('assistant/conversations')
-@UseGuards(ThrottlerGuard, CustomerAuthGuard)
+@UseGuards(IpThrottlerGuard, CustomerAuthGuard, IdentityThrottlerGuard)
+@Throttle({
+  ip: { limit: 120, ttl: 60_000 },
+  identity: { limit: 60, ttl: 60_000 },
+})
 export class AssistantController {
   constructor(private readonly conversations: ConversationService) {}
 
   @Post()
+  @Throttle({
+    ip: { limit: 60, ttl: 60_000 },
+    identity: { limit: 20, ttl: 60_000 },
+  })
   create(
     @Body({ schema: createConversationSchema }) _body: Record<string, never>,
     @Req() request: CustomerRequest,
@@ -39,7 +51,10 @@ export class AssistantController {
   }
 
   @Get(':conversationId')
-  @Throttle({ default: { limit: 120, ttl: 60_000 } })
+  @Throttle({
+    ip: { limit: 120, ttl: 60_000 },
+    identity: { limit: 120, ttl: 60_000 },
+  })
   history(
     @Param('conversationId', { schema: conversationIdSchema }) id: string,
     @Req() request: CustomerRequest,
@@ -48,6 +63,10 @@ export class AssistantController {
   }
 
   @Post(':conversationId/messages')
+  @Throttle({
+    ip: { limit: 30, ttl: 60_000 },
+    identity: { limit: 10, ttl: 60_000 },
+  })
   send(
     @Param('conversationId', { schema: conversationIdSchema }) id: string,
     @Body({ schema: chatRequestSchema }) body: ChatRequest,
@@ -57,6 +76,10 @@ export class AssistantController {
   }
 
   @Post(':conversationId/approvals/:confirmationId')
+  @Throttle({
+    ip: { limit: 30, ttl: 60_000 },
+    identity: { limit: 10, ttl: 60_000 },
+  })
   approve(
     @Param('conversationId', { schema: conversationIdSchema }) id: string,
     @Param('confirmationId', { schema: addressConfirmationIdSchema })

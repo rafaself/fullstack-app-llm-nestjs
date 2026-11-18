@@ -8,7 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { timingSafeEqual } from 'node:crypto';
 import type { ApiConfig, AuthConfig } from '@cat-supplies-store/config';
-import type { DemoAuthenticatedRequest, DemoCustomer } from './demo-auth.types';
+import type { DemoAuthenticatedRequest } from './demo-auth.types';
 
 function matchesBearerToken(
   authorization: string | string[] | undefined,
@@ -49,7 +49,7 @@ export class DemoCustomerGuard implements CanActivate {
       );
     }
 
-    const user: DemoCustomer = { id: 'cus_123' };
+    const user = { id: 'cus_123', rateLimitScope: 'customer' } as const;
     request.user = user;
     return true;
   }
@@ -81,6 +81,7 @@ export class SupportApprovalGuard implements CanActivate {
       );
     }
 
+    request.user = { id: 'support-reviewer', rateLimitScope: 'support' };
     return true;
   }
 }

@@ -133,6 +133,21 @@ describe('job infrastructure configuration', () => {
 describe('validateEnvironment', () => {
   const workflowKey = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=';
 
+  it('ignores forwarded IP headers unless trusted proxy hops are configured', () => {
+    const local = validateEnvironment({
+      ...bedrockEnvironment,
+      WORKFLOWS_ENCRYPTION_KEY: workflowKey,
+    });
+    const proxied = validateEnvironment({
+      ...bedrockEnvironment,
+      TRUST_PROXY_HOPS: '2',
+      WORKFLOWS_ENCRYPTION_KEY: workflowKey,
+    });
+
+    expect(local.api.trustProxyHops).toBe(0);
+    expect(proxied.api.trustProxyHops).toBe(2);
+  });
+
   it('uses local database defaults with a workflow encryption key', () => {
     expect(
       validateEnvironment({
@@ -140,7 +155,7 @@ describe('validateEnvironment', () => {
         WORKFLOWS_ENCRYPTION_KEY: workflowKey,
       }),
     ).toEqual({
-      api: { environment: 'development', port: 3000 },
+      api: { environment: 'development', port: 3000, trustProxyHops: 0 },
       logger: {
         json: false,
         logLevels: ['debug', 'log', 'warn', 'error', 'fatal'],
@@ -165,6 +180,13 @@ describe('validateEnvironment', () => {
       validateEnvironment({
         ...bedrockEnvironment,
         PORT: '70000',
+        WORKFLOWS_ENCRYPTION_KEY: workflowKey,
+      }),
+    ).toThrow('Invalid environment configuration');
+    expect(() =>
+      validateEnvironment({
+        ...bedrockEnvironment,
+        TRUST_PROXY_HOPS: '-1',
         WORKFLOWS_ENCRYPTION_KEY: workflowKey,
       }),
     ).toThrow('Invalid environment configuration');

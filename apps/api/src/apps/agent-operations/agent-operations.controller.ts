@@ -10,6 +10,11 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import {
+  IdentityThrottlerGuard,
+  IpThrottlerGuard,
+} from '@cat-supplies-store/http';
 import {
   catalogSearchQuerySchema,
   catalogSearchResponseSchema,
@@ -32,7 +37,11 @@ import { OrdersService } from '../orders/orders.service';
 import { CatalogService } from '../catalog/catalog.service';
 
 @Controller('agent-tools')
-@UseGuards(DemoCustomerGuard)
+@UseGuards(IpThrottlerGuard, DemoCustomerGuard, IdentityThrottlerGuard)
+@Throttle({
+  ip: { limit: 120, ttl: 60_000 },
+  identity: { limit: 60, ttl: 60_000 },
+})
 export class AgentOperationsController {
   constructor(
     private readonly orders: OrdersService,
@@ -55,6 +64,10 @@ export class AgentOperationsController {
   }
 
   @Patch('orders/:orderId/address')
+  @Throttle({
+    ip: { limit: 30, ttl: 60_000 },
+    identity: { limit: 30, ttl: 60_000 },
+  })
   async changeAddress(
     @CurrentCustomer() customer: DemoCustomer,
     @Param('orderId', { schema: orderIdSchema }) orderId: string,
@@ -75,6 +88,10 @@ export class AgentOperationsController {
   }
 
   @Post('orders/:orderId/address-confirmations')
+  @Throttle({
+    ip: { limit: 30, ttl: 60_000 },
+    identity: { limit: 30, ttl: 60_000 },
+  })
   async proposeAddressChange(
     @CurrentCustomer() customer: DemoCustomer,
     @Param('orderId', { schema: orderIdSchema }) orderId: string,
@@ -94,6 +111,10 @@ export class AgentOperationsController {
 
   // Deliberately not exposed as an agent tool: only the user's explicit UI action approves.
   @Post('address-confirmations/:confirmationId/approve')
+  @Throttle({
+    ip: { limit: 30, ttl: 60_000 },
+    identity: { limit: 30, ttl: 60_000 },
+  })
   async approveAddressChange(
     @CurrentCustomer() customer: DemoCustomer,
     @Param('confirmationId', { schema: addressConfirmationIdSchema })
@@ -114,6 +135,10 @@ export class AgentOperationsController {
   }
 
   @Get('catalog/search')
+  @Throttle({
+    ip: { limit: 60, ttl: 60_000 },
+    identity: { limit: 20, ttl: 60_000 },
+  })
   async search(
     @Query('q', { schema: catalogSearchQuerySchema.shape.q })
     query: CatalogSearchQuery['q'],

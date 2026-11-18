@@ -1,7 +1,11 @@
 import { StandardSchemaValidationPipe } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
+import {
+  IdentityThrottlerGuard,
+  IpThrottlerGuard,
+} from '@cat-supplies-store/http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CustomerAuthGuard } from '../../auth/customer-auth.guard';
 import { AssistantController } from './assistant.controller';
@@ -23,10 +27,22 @@ describe('Conversation HTTP boundary', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     const module = await Test.createTestingModule({
+      imports: [
+        ThrottlerModule.forRoot([
+          { name: 'ip', limit: 120, ttl: 60_000 },
+          { name: 'identity', limit: 60, ttl: 60_000 },
+        ]),
+      ],
       controllers: [AssistantController],
-      providers: [{ provide: ConversationService, useValue: service }],
+      providers: [
+        { provide: ConversationService, useValue: service },
+        IpThrottlerGuard,
+        IdentityThrottlerGuard,
+      ],
     })
-      .overrideGuard(ThrottlerGuard)
+      .overrideGuard(IpThrottlerGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(IdentityThrottlerGuard)
       .useValue({ canActivate: () => true })
       .overrideGuard(CustomerAuthGuard)
       .useValue({ canActivate: auth })

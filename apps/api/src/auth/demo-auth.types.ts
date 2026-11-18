@@ -4,5 +4,5 @@ export interface DemoCustomer {
 
 export interface DemoAuthenticatedRequest {
   headers: { authorization?: string | string[] };
-  user?: DemoCustomer;
+  user?: DemoCustomer & { rateLimitScope?: 'customer' | 'support' };
 }

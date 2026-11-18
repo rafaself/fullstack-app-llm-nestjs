@@ -1,5 +1,9 @@
 import { Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
+import {
+  IdentityThrottlerGuard,
+  IpThrottlerGuard,
+} from '@cat-supplies-store/http';
 import {
   catalogIndexResponseSchema,
   catalogSearchQuerySchema,
@@ -10,11 +14,12 @@ import { SupportApprovalGuard } from '../../auth/demo-auth.guard';
 import { CatalogService } from './catalog.service';
 
 @Controller('catalog')
-@UseGuards(ThrottlerGuard)
 export class CatalogController {
   constructor(private readonly catalog: CatalogService) {}
 
   @Get('search')
+  @UseGuards(IpThrottlerGuard)
+  @Throttle({ ip: { limit: 10, ttl: 60_000 } })
   async search(
     @Query('q', { schema: catalogSearchQuerySchema.shape.q })
     query: CatalogSearchQuery['q'],
@@ -27,7 +32,11 @@ export class CatalogController {
   }
 
   @Post('index')
-  @UseGuards(SupportApprovalGuard)
+  @UseGuards(IpThrottlerGuard, SupportApprovalGuard, IdentityThrottlerGuard)
+  @Throttle({
+    ip: { limit: 10, ttl: 60_000 },
+    identity: { limit: 3, ttl: 60_000 },
+  })
   async index() {
     return catalogIndexResponseSchema.parse(await this.catalog.indexProducts());
   }

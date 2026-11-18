@@ -1,4 +1,8 @@
 import { Module } from '@nestjs/common';
+import {
+  IdentityThrottlerGuard,
+  IpThrottlerGuard,
+} from '@cat-supplies-store/http';
 import { AiWorkflowsModule } from '@nestjs/ai/workflows';
 import { OrdersModule } from '../orders/orders.module';
 import {
@@ -11,6 +15,12 @@ import { RefundsService } from './refunds.service';
 @Module({
   imports: [AiWorkflowsModule, OrdersModule],
   controllers: [RefundsController],
-  providers: [RefundsService, DemoCustomerGuard, SupportApprovalGuard],
+  providers: [
+    RefundsService,
+    DemoCustomerGuard,
+    SupportApprovalGuard,
+    IpThrottlerGuard,
+    IdentityThrottlerGuard,
+  ],
 })
 export class RefundsModule {}

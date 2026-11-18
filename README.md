@@ -127,6 +127,11 @@ For independent production builds, run `pnpm --filter <package>... build`, then
 proxy with the same `/api` and `/agent-api` routes used in development; the
 Vite proxy applies only during development. Use compatible contract versions and
 protect transport between applications when deploying to separate hosts.
+Both Nest APIs default to ignoring forwarded client addresses. Set
+`TRUST_PROXY_HOPS` to the exact number of trusted reverse proxies only when the
+apps cannot be reached directly and each proxy replaces `X-Forwarded-For`.
+Rate limits use shared PostgreSQL storage, so replicas of either API enforce the
+same counters.
 
 ### Refund workflows
 

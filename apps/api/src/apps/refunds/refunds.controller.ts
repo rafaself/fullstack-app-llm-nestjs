@@ -1,4 +1,9 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import {
+  IdentityThrottlerGuard,
+  IpThrottlerGuard,
+} from '@cat-supplies-store/http';
 import {
   refundDecisionSchema,
   refundRequestSchema,
@@ -18,7 +23,11 @@ export class RefundsController {
   constructor(private readonly refunds: RefundsService) {}
 
   @Post()
-  @UseGuards(DemoCustomerGuard)
+  @UseGuards(IpThrottlerGuard, DemoCustomerGuard, IdentityThrottlerGuard)
+  @Throttle({
+    ip: { limit: 30, ttl: 60_000 },
+    identity: { limit: 10, ttl: 60_000 },
+  })
   request(
     @CurrentCustomer() customer: DemoCustomer,
     @Body({ schema: refundRequestSchema }) input: RefundRequest,
@@ -27,13 +36,21 @@ export class RefundsController {
   }
 
   @Get(':runId/approvals')
-  @UseGuards(SupportApprovalGuard)
+  @UseGuards(IpThrottlerGuard, SupportApprovalGuard, IdentityThrottlerGuard)
+  @Throttle({
+    ip: { limit: 60, ttl: 60_000 },
+    identity: { limit: 30, ttl: 60_000 },
+  })
   pending(@Param('runId') runId: string) {
     return this.refunds.pendingApprovals(runId);
   }
 
   @Post(':runId/approvals/:key')
-  @UseGuards(SupportApprovalGuard)
+  @UseGuards(IpThrottlerGuard, SupportApprovalGuard, IdentityThrottlerGuard)
+  @Throttle({
+    ip: { limit: 30, ttl: 60_000 },
+    identity: { limit: 10, ttl: 60_000 },
+  })
   decide(
     @Param('runId') runId: string,
     @Param('key') key: string,

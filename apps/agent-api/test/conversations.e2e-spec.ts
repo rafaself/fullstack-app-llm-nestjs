@@ -6,7 +6,11 @@ import {
 } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
+import {
+  IdentityThrottlerGuard,
+  IpThrottlerGuard,
+} from '@cat-supplies-store/http';
 import { createMigratedDataSource } from '@cat-supplies-store/database';
 import { DataSource } from 'typeorm';
 import * as pg from 'pg';
@@ -74,6 +78,10 @@ describe('server-owned conversations (PostgreSQL, offline model)', () => {
       models.push(model);
       const module = await Test.createTestingModule({
         imports: [
+          ThrottlerModule.forRoot([
+            { name: 'ip', limit: 120, ttl: 60_000 },
+            { name: 'identity', limit: 60, ttl: 60_000 },
+          ]),
           AiModule.forRoot({
             isGlobal: true,
             models: { default: model },
@@ -87,7 +95,9 @@ describe('server-owned conversations (PostgreSQL, offline model)', () => {
         .useValue(new ConversationRepository(database))
         .overrideProvider(BusinessApiClient)
         .useValue(business)
-        .overrideGuard(ThrottlerGuard)
+        .overrideGuard(IpThrottlerGuard)
+        .useValue({ canActivate: () => true })
+        .overrideGuard(IdentityThrottlerGuard)
         .useValue({ canActivate: () => true })
         .compile();
       // Export the database to the feature without adding a production-only testing hook.

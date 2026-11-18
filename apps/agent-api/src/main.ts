@@ -12,6 +12,10 @@ async function bootstrap() {
     bodyParser: false,
   });
 
+  app.set(
+    'trust proxy',
+    app.get(ConfigService).getOrThrow<ApiConfig>('api').trustProxyHops,
+  );
   app.use(requestLogger);
   app.useBodyParser('json', { limit: '100kb' });
   app.useBodyParser('urlencoded', { limit: '100kb', extended: true });

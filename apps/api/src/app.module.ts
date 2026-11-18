@@ -3,6 +3,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { buildQueueOptions } from './config/queue.config';
 import { EmailJobsModule } from './apps/email-jobs/email-jobs.module';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { DataSource } from 'typeorm';
 import { AgentOperationsModule } from './apps/agent-operations/agent-operations.module';
 import { Module, StandardSchemaValidationPipe } from '@nestjs/common';
 import { APP_PIPE } from '@nestjs/core';
@@ -17,6 +18,7 @@ import { CatalogModule } from './apps/catalog/catalog.module';
 import { OrdersModule } from './apps/orders/orders.module';
 import { RefundsModule } from './apps/refunds/refunds.module';
 import { HealthController } from './health.controller';
+import { buildRateLimitOptions } from '@cat-supplies-store/http';
 import {
   appConfigOptions,
   databaseConfig,
@@ -46,7 +48,11 @@ import {
       inject: [queueConfig.KEY],
       useFactory: buildQueueOptions,
     }),
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }]),
+    ThrottlerModule.forRootAsync({
+      imports: [DatabaseModule],
+      inject: [DataSource],
+      useFactory: buildRateLimitOptions,
+    }),
     AgentOperationsModule,
     EmailJobsModule,
     OrdersModule,

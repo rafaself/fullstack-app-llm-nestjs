@@ -1,5 +1,9 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
+import {
+  IdentityThrottlerGuard,
+  IpThrottlerGuard,
+} from '@cat-supplies-store/http';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { EMAIL_QUEUE } from '@cat-supplies-store/contracts';
 import { EmailDraftEntity } from '@cat-supplies-store/database';
@@ -14,6 +18,12 @@ import { EmailJobDraftsRepository } from './email-job-drafts.repository';
     TypeOrmModule.forFeature([EmailDraftEntity]),
   ],
   controllers: [EmailJobsController],
-  providers: [EmailJobsService, EmailJobDraftsRepository, SupportApprovalGuard],
+  providers: [
+    EmailJobsService,
+    EmailJobDraftsRepository,
+    SupportApprovalGuard,
+    IpThrottlerGuard,
+    IdentityThrottlerGuard,
+  ],
 })
 export class EmailJobsModule {}

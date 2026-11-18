@@ -65,6 +65,7 @@ describe('Cat store API (e2e)', () => {
     conversationId = conversation.body.id;
 
     const database = app.get(DataSource);
+    await database.query('DELETE FROM throttler_rate_limits');
     await database.query('DELETE FROM payment_refunds');
     await database.query(
       `UPDATE payments SET refunded_cents = 0, status = 'captured'
