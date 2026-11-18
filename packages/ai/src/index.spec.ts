@@ -214,6 +214,104 @@ describe('explicit AI model configuration', () => {
     expect(createAmazonBedrock).not.toHaveBeenCalled();
   });
 
+  it('validates only embedding providers for an embeddings-only application', () => {
+    const config = loadAiConfig(
+      {
+        OPENAI_API_KEY: 'embedding-key',
+        ANTHROPIC_API_KEY: '',
+        AWS_REGION: '',
+      },
+      {
+        models: {
+          default: { provider: 'anthropic', modelId: 'text-model' },
+        },
+        embeddingModels: {
+          default: { provider: 'openai', modelId: 'embedding-model' },
+        },
+      },
+      ['embedding'],
+    );
+    const options = buildEmbeddingOptions(config);
+
+    expect(options.models).toBeUndefined();
+    expect(options.embeddingModels?.default).toMatchObject({
+      modelId: 'embedding-model',
+      provider: expect.stringContaining('openai'),
+    });
+    expect(config.providers.anthropic).toBeUndefined();
+    expect(config.providers.bedrock).toBeUndefined();
+    expect(createOpenAI).toHaveBeenCalledExactlyOnceWith({
+      apiKey: 'embedding-key',
+      baseURL: 'https://api.openai.com/v1',
+    });
+    expect(createAnthropic).not.toHaveBeenCalled();
+    expect(createAmazonBedrock).not.toHaveBeenCalled();
+  });
+
+  it('requires every language and embedding provider for Agent API and Worker capabilities', () => {
+    const selections = {
+      models: {
+        default: { provider: 'anthropic', modelId: 'text-model' },
+      },
+      embeddingModels: {
+        default: { provider: 'openai', modelId: 'embedding-model' },
+      },
+    } as const;
+
+    expect(() =>
+      loadAiConfig({ OPENAI_API_KEY: 'embedding-key' }, selections, [
+        'language',
+        'embedding',
+      ]),
+    ).toThrow('ANTHROPIC_API_KEY');
+
+    const config = loadAiConfig(
+      {
+        ANTHROPIC_API_KEY: 'language-key',
+        OPENAI_API_KEY: 'embedding-key',
+      },
+      selections,
+      ['language', 'embedding'],
+    );
+    const options = buildAiOptions(config);
+    expect(options.models?.default).toMatchObject({
+      modelId: 'text-model',
+      provider: expect.stringContaining('anthropic'),
+    });
+    expect(options.embeddingModels?.default).toMatchObject({
+      modelId: 'embedding-model',
+      provider: expect.stringContaining('openai'),
+    });
+    expect(createAnthropic).toHaveBeenCalledExactlyOnceWith({
+      apiKey: 'language-key',
+    });
+    expect(createOpenAI).toHaveBeenCalledExactlyOnceWith({
+      apiKey: 'embedding-key',
+      baseURL: 'https://api.openai.com/v1',
+    });
+    expect(createAmazonBedrock).not.toHaveBeenCalled();
+  });
+
+  it('fails on invalid configuration for a required embedding provider', () => {
+    expect(() =>
+      loadAiConfig(
+        {
+          OPENAI_API_KEY: 'embedding-key',
+          OPENAI_BASE_URL: 'file:///tmp/provider',
+        },
+        {
+          models: {
+            default: { provider: 'anthropic', modelId: 'unused-text-model' },
+          },
+          embeddingModels: {
+            default: { provider: 'openai', modelId: 'embedding-model' },
+          },
+        },
+        ['embedding'],
+      ),
+    ).toThrow('OPENAI_BASE_URL');
+  });
+
   it('forwards normalized Bedrock credentials and region explicitly', () => {
     const before = { ...process.env };
     buildAiOptions(

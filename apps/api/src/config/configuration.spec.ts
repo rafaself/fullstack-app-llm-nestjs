@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
-import { createAiConfig, loadAiConfig } from '@cat-supplies-store/ai';
+import { aiModels, createAiConfig, loadAiConfig } from '@cat-supplies-store/ai';
 import {
   readEnvironment,
   validateEnvironment,
@@ -41,7 +41,9 @@ describe('configuration without environment mutations', () => {
       });
       const config = validateEnvironment(environment);
       const database = createDatabaseConfig(config.database);
-      const ai = createAiConfig(loadAiConfig(environment));
+      const ai = createAiConfig(
+        loadAiConfig(environment, aiModels, ['embedding']),
+      );
       const queue = createQueueConfig(loadQueueConfig(environment));
       const workflows = createWorkflowsConfig(config.workflows);
       const module = await Test.createTestingModule({

@@ -3,7 +3,7 @@
 Shared model configuration and AI SDK provider setup for Nest AI modules.
 
 - `src/config.ts` declares typed language and embedding model selections and shared AI defaults.
-- `loadAiConfig` combines those selections with validated provider environment settings.
+- `loadAiConfig` combines those selections with provider settings validated for the requested capabilities (`language`, `embedding`).
 - `createAiConfig` registers the resulting settings under the Nest configuration key `ai`.
 - `buildAiOptions` registers language and embedding models using their explicit aliases.
 - `buildEmbeddingOptions` registers only embeddings and constructs only their providers.
@@ -20,6 +20,11 @@ support embeddings. Only selected providers have their settings validated and
 only referenced providers are constructed. Applications inject generic AI
 configuration; services select model aliases and own prompts, tools,
 authorization, and business rules.
+
+The Business API loads only the `embedding` capability. The Agent API and Agent
+Worker load both `language` and `embedding`; request only the capabilities an
+application registers. Model selections remain shared and explicit in
+`aiModels`.
 
 Credentials use conventional environment names: `AWS_BEARER_TOKEN_BEDROCK`
 (or a complete AWS access-key pair), `ANTHROPIC_API_KEY`, and `OPENAI_API_KEY`.

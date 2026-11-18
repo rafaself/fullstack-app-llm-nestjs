@@ -107,15 +107,21 @@ describe('selected provider configuration', () => {
   });
 
   it('validates the selected OpenAI endpoint', () => {
-    expect(() =>
-      loadAiProviderConfig(
-        {
-          OPENAI_API_KEY: 'key',
-          OPENAI_BASE_URL: 'invalid',
-        },
-        ['openai'],
-      ),
-    ).toThrow('OPENAI_BASE_URL');
+    for (const endpoint of [
+      'invalid',
+      'file:///tmp/provider',
+      'ftp://api.example.test/v1',
+      'https://user:secret@api.example.test/v1',
+      'https://api.example.test/v1?key=secret',
+      'https://api.example.test/v1#fragment',
+    ]) {
+      expect(() =>
+        loadAiProviderConfig(
+          { OPENAI_API_KEY: 'key', OPENAI_BASE_URL: endpoint },
+          ['openai'],
+        ),
+      ).toThrow('OPENAI_BASE_URL');
+    }
   });
 });
 

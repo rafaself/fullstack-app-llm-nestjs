@@ -9,6 +9,8 @@ export interface ModelSelection {
   modelId: string;
 }
 
+export type AiCapability = 'language' | 'embedding';
+
 export interface AiModelConfig {
   models: Record<string, ModelSelection> & { default: ModelSelection };
   embeddingModels: Record<
@@ -44,13 +46,19 @@ const embeddingDefaults = {
 export function loadAiConfig(
   environment: NodeJS.ProcessEnv,
   selections: AiModelConfig = aiModels,
+  requiredCapabilities: readonly AiCapability[] = ['language', 'embedding'],
 ) {
+  const selectedModels = [
+    ...(requiredCapabilities.includes('language')
+      ? Object.values(selections.models)
+      : []),
+    ...(requiredCapabilities.includes('embedding')
+      ? Object.values(selections.embeddingModels)
+      : []),
+  ];
   const providers = loadAiProviderConfig(
     environment,
-    [
-      ...Object.values(selections.models),
-      ...Object.values(selections.embeddingModels),
-    ].map((model) => model.provider),
+    selectedModels.map((model) => model.provider),
   );
   return { ...selections, providers, defaults, embeddingDefaults };
 }

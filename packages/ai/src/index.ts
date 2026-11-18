@@ -8,6 +8,7 @@ import type { AiConfig } from './config.js';
 export {
   loadAiConfig,
   aiModels,
+  type AiCapability,
   type AiConfig,
   type AiModelConfig,
 } from './config.js';

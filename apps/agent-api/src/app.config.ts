@@ -5,13 +5,15 @@ import {
   loadLoggerConfig,
   loadDatabaseConfig,
 } from '@cat-supplies-store/config';
-import { createAiConfig, loadAiConfig } from '@cat-supplies-store/ai';
+import { aiModels, createAiConfig, loadAiConfig } from '@cat-supplies-store/ai';
 import { loadAgentApiConfig } from './config/agent-api.config';
 
 const environment = readEnvironment(resolve(__dirname, '../../../.env'));
 const agent = loadAgentApiConfig(environment);
 
-export const aiConfig = createAiConfig(loadAiConfig(environment));
+export const aiConfig = createAiConfig(
+  loadAiConfig(environment, aiModels, ['language', 'embedding']),
+);
 export const appConfigOptions = {
   isGlobal: true,
   ignoreEnvFile: true,

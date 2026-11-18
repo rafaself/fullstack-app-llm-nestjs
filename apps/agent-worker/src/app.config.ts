@@ -10,11 +10,13 @@ import {
   loadQueueConfig,
   loadMailpitConfig,
 } from '@cat-supplies-store/config';
-import { createAiConfig, loadAiConfig } from '@cat-supplies-store/ai';
+import { aiModels, createAiConfig, loadAiConfig } from '@cat-supplies-store/ai';
 import { createWorkerConfig } from './config/worker.config';
 
 const environment = readEnvironment(resolve(__dirname, '../../../.env'));
-export const aiConfig = createAiConfig(loadAiConfig(environment));
+export const aiConfig = createAiConfig(
+  loadAiConfig(environment, aiModels, ['language', 'embedding']),
+);
 export const workerConfig = createWorkerConfig({
   database: loadDatabaseConfig(environment, 'worker'),
   queue: loadQueueConfig(environment),
